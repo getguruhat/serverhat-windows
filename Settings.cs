@@ -6,7 +6,8 @@ namespace ServerHat;
 /// Windows counterpart of `defaults write com.guruhat.serverhat`).
 internal static class Settings
 {
-    private const string Key = @"Software\GuruHat\ServerHat";
+    /// The smoke test points this at a key of its own.
+    public static string Key { get; set; } = @"Software\GuruHat\ServerHat";
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     /// The same value name the installer's "Start ServerHat when I sign in" task writes.
     private const string RunValue = "GuruHat ServerHat";
@@ -19,6 +20,18 @@ internal static class Settings
     {
         get => Read("updateAnnouncedVersion") as string;
         set { using var key = Registry.CurrentUser.CreateSubKey(Key); key.SetValue("updateAnnouncedVersion", value ?? ""); }
+    }
+
+    /// Fingerprints of the commands the user has allowed (`approvedCommands`, a
+    /// REG_MULTI_SZ), or null before the first version with approvals ran.
+    public static List<string>? ApprovedCommands
+    {
+        get => Read("approvedCommands") is string[] list ? list.ToList() : null;
+        set
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(Key);
+            key.SetValue("approvedCommands", value?.ToArray() ?? Array.Empty<string>(), RegistryValueKind.MultiString);
+        }
     }
 
     /// "Open ServerHat at sign-in", as a Run entry for this user.

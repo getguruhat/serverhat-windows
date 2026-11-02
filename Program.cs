@@ -61,6 +61,10 @@ internal sealed class TrayApp : ApplicationContext
     private readonly Dictionary<Color, Bitmap> dots = [];
     private Font? bold;
     private UpdateCheck.Release? update;
+    /// The server the latest balloon asked about, so clicking it opens that server's review.
+    private string? balloonServer;
+    /// Which servers the menu shows and which of them wait for approval; a change rebuilds it.
+    private string layout = "";
     private bool dirty = true;
     private bool quitting;
 
@@ -73,6 +77,11 @@ internal sealed class TrayApp : ApplicationContext
         api.Start();
 
         tray = new NotifyIcon { ContextMenuStrip = menu, Visible = true };
+        manager.ApprovalNeeded += AskForApproval;
+        tray.BalloonTipClicked += (_, _) =>
+        {
+            if (balloonServer is { } id && manager.Server(id) is { } server) ApprovalWindow.Ask(manager, server);
+        };
         menu.Opening += (_, e) => { Build(); e.Cancel = false; };
         // Left click opens the same menu, the way a menu bar icon would.
         tray.MouseUp += (_, e) =>
@@ -84,7 +93,7 @@ internal sealed class TrayApp : ApplicationContext
         refresh.Start();
         Build();
         Refresh();
-        if (firstRun)
+        if (firstRun && manager.PendingApprovals.Count == 0)
             tray.ShowBalloonTip(8000, "ServerHat is running", "Click the globe here to add a server or import a .claude\\launch.json.", ToolTipIcon.Info);
 
         updateTimer.Tick += async (_, _) =>
@@ -105,9 +114,11 @@ internal sealed class TrayApp : ApplicationContext
         var states = manager.States.ToList();
         var running = states.Count(s => s.Status is ServerStatus.Running or ServerStatus.Starting);
         var crashed = states.Any(s => s.Status is ServerStatus.Crashed or ServerStatus.Failed);
-        tray.Icon = TrayIcon(crashed ? "crashed" : running > 0 ? "running" : "idle");
+        var pending = manager.PendingApprovals.Count > 0;
+        tray.Icon = TrayIcon(crashed ? "crashed" : pending ? "pending" : running > 0 ? "running" : "idle");
         var text = running == 0 ? "ServerHat" : $"ServerHat — {running} running";
         if (crashed) text += ", needs attention";
+        else if (pending) text += ", waiting for your approval";
         tray.Text = text.Length > 63 ? text.Substring(0, 63) : text;
         if (menu.Visible) UpdateServerItems();
     }
@@ -115,7 +126,8 @@ internal sealed class TrayApp : ApplicationContext
     [DllImport("user32.dll")]
     private static extern bool DestroyIcon(IntPtr handle);
 
-    /// A globe in the taskbar's text color, with a green dot while servers run and a red one when one crashed.
+    /// A globe in the taskbar's text color, with a green dot while servers run, an orange
+    /// one when a command waits for approval and a red one when a server crashed.
     private Icon TrayIcon(string kind)
     {
         var dark = Theme.DarkTaskbar;
@@ -140,7 +152,12 @@ internal sealed class TrayApp : ApplicationContext
                 var badge = new RectangleF(size - 7.5f * s, size - 7.5f * s, 7f * s, 7f * s);
                 using var clear = new SolidBrush(dark ? Color.FromArgb(32, 32, 32) : Color.FromArgb(243, 243, 243));
                 g.FillEllipse(clear, RectangleF.Inflate(badge, 1.2f * s, 1.2f * s));
-                using var fill = new SolidBrush(kind == "running" ? Color.FromArgb(16, 185, 80) : Color.FromArgb(232, 58, 48));
+                using var fill = new SolidBrush(kind switch
+                {
+                    "running" => Color.FromArgb(16, 185, 80),
+                    "pending" => Pending,
+                    _ => Color.FromArgb(232, 58, 48),
+                });
                 g.FillEllipse(fill, badge);
             }
         }
@@ -166,6 +183,8 @@ internal sealed class TrayApp : ApplicationContext
         dots[color] = bitmap;
         return bitmap;
     }
+
+    private static readonly Color Pending = Color.FromArgb(245, 130, 32);
 
     private static Color StatusColor(ServerStatus status) => status switch
     {
@@ -203,6 +222,7 @@ internal sealed class TrayApp : ApplicationContext
 
         if (manager.Servers.Count == 0)
             menu.Items.Add(new ToolStripMenuItem("No servers yet. Add one, import a .claude\\launch.json,\nor ask Claude Code or Codex to set one up (see the README).") { Enabled = false });
+        layout = Layout();
         foreach (var server in manager.Servers)
         {
             var id = server.Id;
@@ -211,6 +231,7 @@ internal sealed class TrayApp : ApplicationContext
             item.DropDownOpening += (_, _) => FillServerMenu(item, id);
             serverItems[id] = item;
             menu.Items.Add(item);
+            if (manager.NeedsApproval(id)) AddApprovalItems(server);
         }
         UpdateServerItems();
 
@@ -232,10 +253,50 @@ internal sealed class TrayApp : ApplicationContext
         return manager.Servers.Count == 0 ? "ServerHat" : $"ServerHat — {running} of {manager.Servers.Count} running";
     }
 
+    private string Layout() => string.Join("\n", manager.Servers.Select(s => s.Id + (manager.NeedsApproval(s.Id) ? " " + ServerManager.Fingerprint(s) : "")));
+
+    /// A server added or changed through the API or servers.json, waiting for the user: its
+    /// full command, folder and environment names, with Allow and Remove.
+    private void AddApprovalItems(ServerConfig server)
+    {
+        var id = server.Id;
+        var active = manager.State(id).Status is ServerStatus.Running or ServerStatus.Starting or ServerStatus.Stopping;
+        void Line(string text, bool strong = false)
+        {
+            var line = new ToolStripMenuItem(Escape(text)) { Enabled = false, Padding = new Padding(16, 0, 0, 0) };
+            if (strong && bold is not null) line.Font = bold;
+            menu.Items.Add(line);
+        }
+        Line(active ? "Changed. Allow the new settings to restart it." : "New. Allow it to run this command?", true);
+        foreach (var part in Wrap(ServerManager.CommandLine(server))) Line(part);
+        foreach (var part in Wrap("in " + server.Cwd)) Line(part);
+        if (server.Env.Count > 0)
+            foreach (var part in Wrap("with " + string.Join(", ", server.Env.Keys.OrderBy(k => k, StringComparer.Ordinal)))) Line(part);
+        menu.Items.Add(new ToolStripMenuItem("Allow", null, (_, _) => Allow(id)) { Padding = new Padding(16, 0, 0, 0) });
+        menu.Items.Add(new ToolStripMenuItem("Remove…", null, (_, _) => { if (manager.Server(id) is { } current) ConfirmRemove(current); }) { Padding = new Padding(16, 0, 0, 0) });
+        menu.Items.Add(new ToolStripSeparator());
+    }
+
+    /// Splits long text into menu-width lines, so the whole command shows.
+    private static IEnumerable<string> Wrap(string text, int width = 90)
+    {
+        for (var i = 0; i < text.Length; i += width) yield return text.Substring(i, Math.Min(width, text.Length - i));
+    }
+
+    private void Allow(string id) => ApprovalWindow.Allow(manager, id);
+
+    /// One notification per pending command fingerprint; clicking it opens the review.
+    private void AskForApproval(ServerConfig server)
+    {
+        var body = $"{ServerManager.CommandLine(server)}\nin {server.Cwd}. Click to review and allow.";
+        balloonServer = server.Id;
+        tray.ShowBalloonTip(15000, Short($"Review command for {server.Name}", 63), Short(body, 255), ToolTipIcon.Warning);
+    }
+
     /// Updates names and statuses in place, so an open menu follows along without closing.
     private void UpdateServerItems()
     {
-        if (!serverItems.Keys.OrderBy(k => k).SequenceEqual(manager.Servers.Select(s => s.Id).OrderBy(k => k)))
+        if (Layout() != layout)
         {
             if (menu.Visible) Build();
             return;
@@ -246,8 +307,9 @@ internal sealed class TrayApp : ApplicationContext
             var item = serverItems[server.Id];
             var state = manager.State(server.Id);
             var port = server.Port is { } p ? $"  :{p}" : "";
-            item.Text = $"{Escape(server.Name)}{port}  —  {state.Status.Label()}";
-            item.Image = Dot(StatusColor(state.Status));
+            var pending = manager.NeedsApproval(server.Id);
+            item.Text = $"{Escape(server.Name)}{port}  —  {(pending ? "waiting for your approval" : state.Status.Label())}";
+            item.Image = Dot(pending ? Pending : StatusColor(state.Status));
             item.ToolTipText = state.Detail ?? "";
         }
     }
@@ -311,7 +373,8 @@ internal sealed class TrayApp : ApplicationContext
         if (dialog.ShowDialog() != DialogResult.OK) return;
         try
         {
-            var added = manager.ImportLaunchJson(dialog.FileName);
+            // Importing from the menu is the user's own choice, so it counts as allowed.
+            var added = manager.ImportLaunchJson(dialog.FileName, approvedByUser: true);
             if (added.Count == 0)
                 MessageBox.Show("Every configuration in that launch.json is already in ServerHat.", "Nothing new to import", MessageBoxButtons.OK, MessageBoxIcon.Information);
             else
