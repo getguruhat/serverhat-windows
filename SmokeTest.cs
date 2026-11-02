@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Microsoft.Win32;
 using Timer = System.Windows.Forms.Timer;
 
 namespace ServerHat;
@@ -54,8 +55,15 @@ internal static class SmokeTest
         File.WriteAllText(Path.Combine(bin, "lwargs.cmd"), $"@\"{exe}\" --print-args %*\r\n");
         Environment.SetEnvironmentVariable("PATH", bin + ";" + Environment.GetEnvironmentVariable("PATH"));
         Note("folder " + root);
+        // Approvals go to a registry key of the test's own.
+        Settings.Key = @"Software\GuruHat\ServerHat-smoke-" + Process.GetCurrentProcess().Id;
+        // A server set up before approvals existed.
+        Directory.CreateDirectory(Paths.ConfigFolder);
+        File.WriteAllText(Paths.ConfigFile, "{\"version\":1,\"servers\":[{\"name\":\"Existing\",\"command\":\"lwargs\",\"args\":[\"old\"]}]}");
 
         var manager = new ServerManager();
+        var notified = new Dictionary<string, int>();
+        manager.ApprovalNeeded += server => notified[server.Id] = notified.TryGetValue(server.Id, out var n) ? n + 1 : 1;
         var api = new ApiServer(manager, ApiPort);
         api.Start();
         Check(api.Problem is null, "API listens on 127.0.0.1:" + ApiPort + (api.Problem is null ? "" : ": " + api.Problem));
@@ -78,10 +86,14 @@ internal static class SmokeTest
         Check((await Send("POST", "/v1/servers", "{\"name\":\"x\"}")).Body == "{\n  \"error\" : \"missing \\\"command\\\" at top level\"\n}\n", "missing command: the macOS error text");
         Check((await Send("POST", "/v1/servers", "x", contentType: "text/plain")).Status == 415, "non-JSON body: 415");
 
+        // Approval: what an agent adds or changes can't run until the user allows it.
+        await Approval(manager, notified);
+
         // Add, start through a .cmd shim, wait, and find the whole tree.
         var added = await Send("POST", "/v1/servers", $"{{\"name\":\"Smoke\",\"command\":\"lwtest\",\"args\":[\"{ServerPort}\"],\"port\":{ServerPort},\"cwd\":\"~\"}}");
         Check(added.Status == 201 && Field(added, "id") as string == "smoke", "POST /v1/servers adds \"smoke\": " + added.Status);
         Check((await Send("POST", "/v1/servers", "{\"name\":\"Smoke\",\"command\":\"lwtest\"}")).Status == 409, "same id again: 409");
+        manager.Approve("smoke");
         var started = await Send("POST", "/v1/servers/smoke/start?wait=30");
         Check(State(started) == "running", "start?wait=30 through lwtest.cmd: " + State(started) + " " + Detail(started));
         var rootPid = Pid(started);
@@ -93,6 +105,7 @@ internal static class SmokeTest
 
         // A second server on the same port.
         await Send("POST", "/v1/servers", $"{{\"name\":\"Other\",\"command\":\"lwtest\",\"args\":[\"{ServerPort}\"],\"port\":{ServerPort}}}");
+        manager.Approve("other");
         Check((await Send("POST", "/v1/servers/other/start")).Status == 409, "starting another server on a busy port: 409");
         await Task.Delay(1500);
         var other = await Send("GET", "/v1/servers/other");
@@ -109,20 +122,24 @@ internal static class SmokeTest
 
         // Crashes, missing commands, argument quoting.
         await Send("POST", "/v1/servers", "{\"name\":\"Crash\",\"command\":\"cmd\",\"args\":[\"/c\",\"echo boom& exit /b 3\"]}");
+        manager.Approve("crash");
         await Send("POST", "/v1/servers/crash/start");
         var crash = await Until("crash", "crashed", 10);
         Check(State(crash) == "crashed" && Field(crash, "status", "exitCode") is long code && code == 3 && Detail(crash).Contains("boom"), "a crash is reported with its exit code and last line: " + Detail(crash));
         await Send("POST", "/v1/servers", "{\"name\":\"Missing\",\"command\":\"definitely-not-a-command-lw\"}");
+        manager.Approve("missing");
         var missing = await Send("POST", "/v1/servers/missing/start");
         Check(missing.Status == 400 && State(await Send("GET", "/v1/servers/missing")) == "failed", "a command that isn't on PATH: failed");
         string[] batchArgs = ["a b", "x&y", "100%", "^caret", "(paren)", "!bang!", "semi;colon"];
         await Send("POST", "/v1/servers", "{\"name\":\"Batch args\",\"command\":\"lwargs\",\"args\":" + Json.Write(batchArgs.ToList()) + "}");
+        manager.Approve("batch-args");
         await Send("POST", "/v1/servers/batch-args/start");
         await Until("batch-args", "stopped", 10);
         var printed = Strings(await Send("GET", "/v1/servers/batch-args/logs"), "lines").Where(l => l.StartsWith("arg:")).Select(l => l.Substring(4)).ToList();
         Check(printed.SequenceEqual(batchArgs), "arguments reach a program behind a .cmd unchanged: " + string.Join(" | ", printed));
         string[] exeArgs = ["a b", @"back\slash\", "q\"uote", ""];
         await Send("POST", "/v1/servers", "{\"name\":\"Exe args\",\"command\":" + Json.Write(exe) + ",\"args\":" + Json.Write(new List<object?> { "--print-args" }.Concat(exeArgs).ToList()) + "}");
+        manager.Approve("exe-args");
         await Send("POST", "/v1/servers/exe-args/start");
         await Until("exe-args", "stopped", 10);
         printed = Strings(await Send("GET", "/v1/servers/exe-args/logs"), "lines").Where(l => l.StartsWith("arg:")).Select(l => l.Substring(4)).ToList();
@@ -147,7 +164,9 @@ internal static class SmokeTest
         var good = File.ReadAllText(Paths.ConfigFile);
         File.WriteAllText(Paths.ConfigFile, good.Replace("\"servers\" : [", "\"servers\" : [\n    { \"name\" : \"Hand edited\", \"command\" : \"node\" },"));
         await Task.Delay(1500);
-        Check((await Send("GET", "/v1/servers/hand-edited")).Status == 200, "an edit to servers.json is picked up");
+        var handEdited = await Send("GET", "/v1/servers/hand-edited");
+        Check(handEdited.Status == 200, "an edit to servers.json is picked up");
+        Check(Field(handEdited, "needsApproval") is true && (await Send("POST", "/v1/servers/hand-edited/start")).Status == 403, "a server added in servers.json needs approval");
         File.WriteAllText(Paths.ConfigFile, "{ broken");
         await Task.Delay(1500);
         var broken = await Send("GET", "/v1/servers");
@@ -167,7 +186,63 @@ internal static class SmokeTest
         await Task.Delay(1000);
         Check(!Running(againRoot) && !Running(againChild), "quitting ends the servers ServerHat started");
 
+        try { Registry.CurrentUser.DeleteSubKeyTree(Settings.Key, false); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         try { Directory.Delete(root, true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+    }
+
+    private static async Task Approval(ServerManager manager, Dictionary<string, int> notified)
+    {
+        var existing = await Send("GET", "/v1/servers/existing");
+        Check(existing.Status == 200 && Field(existing, "needsApproval") is null && Settings.ApprovedCommands?.Count == 1,
+            "servers from before approvals count as allowed");
+
+        var added = await Send("POST", "/v1/servers", "{\"name\":\"Pending\",\"command\":\"lwargs\",\"args\":[\"hello\"]}");
+        Check(added.Status == 201 && Field(added, "needsApproval") is true, "a server added through the API needs approval");
+        var expected = "{\n  \"approvalNote\" : \"New or changed command: it can't start until the user clicks Allow in the ServerHat menu.\",\n"
+                       + "  \"args\" : [\n    \"hello\"\n  ],\n  \"command\" : \"lwargs\",\n  \"cwd\" : \"~\",\n  \"env\" : {\n\n  },\n  \"id\" : \"pending\",\n"
+                       + "  \"log\" : " + Json.Write(manager.Log("pending").FilePath) + ",\n  \"name\" : \"Pending\",\n  \"needsApproval\" : true,\n"
+                       + "  \"startAtLogin\" : false,\n  \"status\" : {\n    \"state\" : \"stopped\"\n  }\n}\n";
+        var pending = await Send("GET", "/v1/servers/pending");
+        Check(pending.Body == expected, "a pending server's JSON is byte for byte like macOS:\n" + pending.Body);
+
+        const string refusal = "{\n  \"error\" : \"Approval needed for Pending: lwargs hello in ~. Click its ServerHat notification to review the command and Allow it, or open the ServerHat menu.\"\n}\n";
+        var start = await Send("POST", "/v1/servers/pending/start");
+        Check(start.Raw.StartsWith("HTTP/1.1 403 Forbidden\r\n") && start.Body == refusal, "start answers 403 with the macOS text: " + start.Body.Trim());
+        Check((await Send("POST", "/v1/servers/pending/restart")).Body == refusal, "restart answers the same 403");
+        var waited = DateTime.UtcNow;
+        Check((await Send("POST", "/v1/servers/pending/start?wait=1")).Status == 403 && DateTime.UtcNow - waited >= TimeSpan.FromSeconds(0.9),
+            "start?wait=1 waits a second for approval, then answers 403");
+        await Send("POST", "/v1/start-all");
+        await Task.Delay(1000);
+        Check(!Strings(await Send("GET", "/v1/servers/pending/logs"), "lines").Any(l => l.StartsWith("arg:")), "start-all leaves a pending server alone");
+        Check(Strings(await Send("GET", "/v1/servers/existing/logs"), "lines").Contains("arg:old"), "start-all starts the allowed ones");
+        Check(notified.TryGetValue("pending", out var once) && once == 1, $"one notification for the pending command, however often it's started ({once})");
+
+        async Task AllowSoon() { await Task.Delay(1000); manager.Approve("pending"); }
+        var allowing = AllowSoon();
+        var allowed = await Send("POST", "/v1/servers/pending/start?wait=15");
+        await allowing;
+        Check(allowed.Status == 200 && Field(allowed, "needsApproval") is null, "start?wait=15 goes ahead once the user allows it: " + allowed.Status);
+        await Until("pending", "stopped", 10);
+        Check(Strings(await Send("GET", "/v1/servers/pending/logs"), "lines").Contains("arg:hello"), "the allowed server ran");
+        Check(Settings.ApprovedCommands?.Contains(ServerManager.Fingerprint(manager.Server("pending")!)) == true && !File.ReadAllText(Paths.ConfigFile).Contains("needsApproval"),
+            "approvals are kept in the registry, not in servers.json");
+
+        var renamed = await Send("PATCH", "/v1/servers/pending", "{\"name\":\"Pending\",\"port\":47393,\"url\":\"http://127.0.0.1:47393/x\",\"startAtLogin\":false}");
+        Check(renamed.Status == 200 && Field(renamed, "needsApproval") is null, "changing name, port, url or startAtLogin doesn't need approval");
+        await Send("PATCH", "/v1/servers/pending", "{\"port\":null,\"url\":null}");
+        var changed = await Send("PATCH", "/v1/servers/pending", "{\"args\":[\"changed\"]}");
+        Check(Field(changed, "needsApproval") is true && (await Send("POST", "/v1/servers/pending/start")).Status == 403, "changing args needs approval again");
+        Check(notified["pending"] == 2, "the changed command gets a notification of its own");
+        manager.Approve("pending");
+        Check((await Send("POST", "/v1/servers/pending/start")).Status == 200, "and starts once allowed");
+        await Until("pending", "stopped", 10);
+        Check(Field(await Send("PATCH", "/v1/servers/pending", "{\"env\":{\"SMOKE\":\"1\"}}"), "needsApproval") is true, "changing env needs approval");
+        Check(Field(await Send("PATCH", "/v1/servers/pending", "{\"cwd\":\"~/..\"}"), "needsApproval") is true, "changing cwd needs approval");
+        var edited = manager.Server("pending")!.Copy();
+        edited.Args = ["edited"];
+        manager.Update("pending", edited, approvedByUser: true);
+        Check(Field(await Send("GET", "/v1/servers/pending"), "needsApproval") is null, "a change saved in ServerHat's own window counts as allowed");
     }
 
     // MARK: HTTP

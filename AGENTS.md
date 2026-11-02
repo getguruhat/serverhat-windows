@@ -5,9 +5,9 @@ the user asks you to add, run, restart or debug a local server, use ServerHat in
 starting the server in your own shell, so it keeps running after your session and the user
 can control it from the notification area.
 
-The core API is the same as ServerHat for macOS, without command approval, MCP or
-`/v1/import-project`. The examples are for PowerShell; in Git Bash or
-WSL, the macOS AGENTS.md examples work with the token from `$APPDATA/ServerHat/api-token`.
+The core API is the same as ServerHat for macOS, without MCP or `/v1/import-project`.
+The examples are for PowerShell; in Git Bash or WSL, the macOS AGENTS.md examples work
+with the token from `$APPDATA/ServerHat/api-token`.
 
 1. Check ServerHat is running: `Invoke-RestMethod http://127.0.0.1:47317/v1/health`. If that
    fails, ask the user to open ServerHat from the Start menu. The real URL is in
@@ -30,6 +30,11 @@ WSL, the macOS AGENTS.md examples work with the token from `$APPDATA/ServerHat/a
 
    If the project has `.claude\launch.json`, import it instead:
    `Invoke-RestMethod -Method Post "$LW/v1/import" -Headers $auth -ContentType "application/json" -Body (@{ path = "C:\abs\project" } | ConvertTo-Json)`.
+   New or changed commands need the user's approval in ServerHat. If a start is actually
+   blocked for approval (`403`, or `"needsApproval": true`), tell the user once with the
+   exact command and folder shown in the error; ServerHat's notification opens Allow,
+   Remove and Later choices. `start?wait=30` waits for them to click Allow. Don't repeat
+   generic approval warnings.
 5. If `status.state` is `crashed`, `failed` or `port-in-use`, read `status.detail` and
    `(Invoke-RestMethod "$LW/v1/servers/<id>/logs?lines=100" -Headers $auth).lines`, fix the
    cause, then `restart?wait=30`.
