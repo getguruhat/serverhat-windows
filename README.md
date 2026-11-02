@@ -9,7 +9,7 @@ work (a Node script, `npm run dev`, `python -m http.server`, anything with a com
 line), so you never have to keep a terminal window open for them. It also has a local API,
 so Claude Code, Codex or your own scripts can add and control servers for you.
 
-<img src="docs/menu.png" width="289" alt="ServerHat's menu in the Windows notification area: five servers with their status, one of them waiting for approval with its command, folder and environment names, and Allow and Remove">
+<img src="docs/panel.png" width="360" alt="ServerHat's panel: two servers running with their addresses, one stopped, one crashed with its error, and one waiting for approval with its command, folder and environment names, and Allow and Remove"> <img src="docs/panel-dark.png" width="360" alt="The same panel in dark mode">
 
 macOS version: https://github.com/getguruhat/serverhat-macos. Both use the same
 `servers.json` format and the same core API.
@@ -25,10 +25,11 @@ but not yet all of its features. These are macOS-only for now:
 
 ## What it does
 
-- A globe in the notification area, with a list of your servers. Each shows whether it's
-  **running**, **stopped**, **crashed**, **failed** to start or has its **port in use**,
-  and has Start/Stop, Restart, Open in browser, View logs, Edit and Remove. **Start all**
-  and **Stop all** are at the top. A green dot on the globe means servers are running, an
+- A globe in the notification area that opens a panel with your servers, like the Mac
+  app's, in light or dark mode. Each shows whether it's **running** (with its address),
+  **stopped**, **crashed**, **failed** to start or has its **port in use**, and has
+  Start/Stop, Restart and a menu with Open in browser, View logs, Edit and Remove.
+  **Start all** and **Stop all** are at the top. A green dot on the globe means servers are running, an
   orange one that a command is waiting for your approval, and a red one that one crashed.
 - Asks you before running a command that Claude Code, Codex or a script added or changed
   (see [Approval](#approval)).
@@ -59,13 +60,20 @@ tray icons**.
 
 ## Using it
 
-Click the globe (left or right click) to open the menu. Each server's submenu has Start or
-Stop, Restart, Open in browser, View logs, Edit, Open folder and Remove; when something else
-holds its port, it also offers to end that process. At the bottom are **Add server**,
-**Import .claude\launch.json**, **Open servers.json**, **About ServerHat** and **Quit**.
+Click the globe to open the panel. Each server has Start or Stop (and Restart while it
+runs); a running server's address opens it in your browser. Its **⋯** button has Open in
+browser, View logs, Edit, Open folder and Remove, and, when something else holds its port,
+ending that process. At the top, **+** adds a server or imports a `.claude\launch.json`,
+the gear has **Open servers.json**, the logs folder, **Open ServerHat when I sign in** and
+**About ServerHat**, and the power button quits ServerHat (which stops its servers). Click
+anywhere else or press Esc to close it.
 
 A server waiting for your approval shows its full command, folder and environment
-variable names right in the menu, with **Allow** and **Remove**; see [Approval](#approval).
+variable names right in the panel, with **Allow** and **Remove**; see [Approval](#approval).
+
+Right-click the globe for the same things as a classic menu:
+
+<img src="docs/menu.png" width="289" alt="The right-click menu: every server with its status and a submenu, and Add server, Import, Open servers.json, About and Quit">
 
 <img src="docs/edit.png" width="541" alt="The Edit window: name, folder, command, arguments, port, URL and environment variables">
 
@@ -307,7 +315,8 @@ The code:
 - `Processes.cs`: `CreateProcess` with a Job Object, `PATH`/`PATHEXT` lookup, argument
   quoting for programs and batch files, and the TCP listener table.
 - `ApiServer.cs`, `TokenFile.cs`: the local HTTP API and its token.
-- `Program.cs`: the notification-area icon and menu. `Windows.cs`: the log, edit and
+- `Program.cs`: the notification-area icon and right-click menu. `TrayPanel.cs`: the
+  panel it opens. `Windows.cs`: the log, edit and
   approval windows. `AboutWindow.cs`: the About window.
 - `SmokeTest.cs`, `Screenshots.cs`: `--smoke-test` and `--screenshots`.
 
