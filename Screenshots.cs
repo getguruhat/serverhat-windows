@@ -7,7 +7,7 @@ namespace ServerHat;
 
 /// `ServerHat.exe --screenshots <folder>`, run by .github/workflows/screenshots.yml: starts
 /// the real tray app with a few example servers in a temporary folder and saves the menu,
-/// the approval window and the Edit window as PNGs for the README.
+/// the panel (light and dark), the approval window and the Edit window as PNGs for the README.
 ///
 /// The running servers are ServerHat.exe in its `--test-listen` mode (see SmokeTest.cs);
 /// their commands don't show in the pictures.
@@ -53,6 +53,19 @@ internal static class Screenshots
             try
             {
                 var area = Screen.PrimaryScreen.WorkingArea;
+                var panel = app.Panel;
+                panel.StayOpen = true;
+                foreach (var (dark, name) in new[] { (false, "panel.png"), (true, "panel-dark.png") })
+                {
+                    panel.ForceDark = dark;
+                    panel.ShowNear(new Point(area.Right - 200, area.Bottom - 10));
+                    await Task.Delay(800);
+                    if (!Save(panel.Bounds, Path.Combine(output, name))) failures++;
+                    if (!dark) Save(Rectangle.FromLTRB(panel.Left - 40, panel.Top - 40, Screen.PrimaryScreen.Bounds.Right, Screen.PrimaryScreen.Bounds.Bottom), Path.Combine(output, "panel-in-place.png"));
+                    panel.HideNow();
+                }
+                panel.StayOpen = false;
+
                 var menu = app.ShowMenu(new Point(area.Left + 40, area.Top + 40));
                 await Task.Delay(800);
                 if (!Save(menu.Bounds, Path.Combine(output, "menu.png"))) failures++;
