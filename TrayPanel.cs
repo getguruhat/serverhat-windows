@@ -14,7 +14,7 @@ namespace ServerHat;
 /// with no Graphics only measures.
 internal sealed class TrayPanel : Form
 {
-    private const int Width0 = 360, Pad = 12, MaxList = 420;
+    private const int Width0 = 360, Pad = 12, MaxList = 560;
 
     private readonly TrayApp app;
     private readonly ServerManager manager;
@@ -447,7 +447,7 @@ internal sealed class TrayPanel : Form
         }
         listViewport = new Rectangle(x, cy, width, viewport);
         var state = g?.Save();
-        g?.SetClip(new Rectangle(x, cy - S(6), width, viewport + S(12)));
+        g?.SetClip(new Rectangle(x, cy - S(2), width, viewport + S(4)));
         var ry = cy - scroll;
         for (var i = 0; i < servers.Count; i++)
         {
