@@ -73,13 +73,16 @@ variable names right in the panel, with **Allow** and **Remove**; see [Approval]
 
 Right-click the globe for the same things as a classic menu:
 
-<img src="docs/menu.png" width="289" alt="The right-click menu: every server with its status and a submenu, and Add server, Import, Open servers.json, About and Quit">
+<img src="docs/menu.png" width="289" alt="The right-click menu: every server with its status and a submenu, and Add server, Import, Open servers.json, Open ServerHat when I sign in, About and Quit">
 
 <img src="docs/edit.png" width="541" alt="The Edit window: name, folder, command, arguments, port, URL and environment variables">
 
-In a server's Edit window, **Start this server when ServerHat starts** makes it start with
-ServerHat, and **Open ServerHat when I sign in to Windows** makes that happen at sign-in
-(the installer offers the same).
+### Starting with Windows
+
+**Open ServerHat when I sign in** is in the panel's gear menu and in the right-click menu
+(the installer offers it too). In a server's Edit window, **Start this server when ServerHat
+starts** makes it start with ServerHat; tick it and the same sign-in option shows below it,
+so both happen when you sign in.
 
 ## The config file
 
@@ -119,7 +122,7 @@ ServerHat, and **Open ServerHat when I sign in to Windows** makes that happen at
 | `port` | no | The port the server listens on. ServerHat uses it to tell "starting" from "running" and to detect a port that's already in use. |
 | `url` | no | What Open in browser opens. Defaults to `http://127.0.0.1:<port>`. |
 | `env` | no | Extra environment variables, `{"NAME": "value"}`. |
-| `startAtLogin` | no | Start this server whenever ServerHat starts. Turn on **Open ServerHat when I sign in to Windows** (in the server's Edit window) to have that happen at sign-in. |
+| `startAtLogin` | no | Start this server whenever ServerHat starts. Turn on **Open ServerHat when I sign in** to have that happen at sign-in; see [Starting with Windows](#starting-with-windows). |
 
 Save the file and ServerHat reloads it within a second. If the JSON is broken, the menu
 says where, and the last good settings stay in use. A server that's running keeps its old
