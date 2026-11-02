@@ -1,0 +1,59 @@
+name: Build Windows installer
+on:
+  push:
+    branches: [main]
+    # Pushing a tag such as v0.2.1 publishes that release; pushes to main only build.
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Read version
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content ServerHat.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          "VERSION=$version" | Out-File $env:GITHUB_ENV -Append
+      # .NET Framework 4.8 comes with Windows, so this is a small folder, not a self-contained runtime.
+      - name: Publish application
+        shell: pwsh
+        run: |
+          dotnet publish ServerHat.csproj -c Release -o publish
+          if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
+          Get-ChildItem publish | Format-Table Name, Length
+          "Total: {0:N2} MB" -f ((Get-ChildItem publish -Recurse | Measure-Object Length -Sum).Sum / 1MB)
+      # Runs the real server manager and API: starts servers through a .cmd shim, stops their
+      # whole process tree, and checks the API's answers against the macOS version's bytes.
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $app = Start-Process publish/ServerHat.exe -ArgumentList '--smoke-test' -PassThru -Wait
+          Get-Content smoke-test.log
+          if ($app.ExitCode -ne 0) { throw "Smoke test failed: $($app.ExitCode)" }
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+      - name: Build installer
+        shell: pwsh
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ServerHat-Windows-installer
+          path: dist/ServerHat-*-Windows-Setup.exe
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = "v$env:VERSION"
+          if ($env:GITHUB_REF_NAME -ne $tag) { throw "Tag $env:GITHUB_REF_NAME doesn't match ServerHat.csproj; expected $tag" }
+          # Fails if the release already exists, so a published installer is never replaced.
+          gh release create $tag "dist/ServerHat-$env:VERSION-Windows-Setup.exe" --title "ServerHat for Windows $env:VERSION" --notes-file RELEASE_NOTES.md
+          if ($LASTEXITCODE -ne 0) { throw "gh release create failed" }
