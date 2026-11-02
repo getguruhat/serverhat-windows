@@ -52,6 +52,12 @@ internal static class Screenshots
             start.Stop();
             try
             {
+                // Whatever else is on screen, such as the approval notification, for a look,
+                // then without the notification, which would cover the panel.
+                Save(Screen.PrimaryScreen.Bounds, Path.Combine(output, "screen.png"));
+                app.HideNotification();
+                await Task.Delay(800);
+
                 var area = Screen.PrimaryScreen.WorkingArea;
                 var panel = app.Panel;
                 panel.StayOpen = true;
@@ -76,9 +82,6 @@ internal static class Screenshots
 
                 EditWindow.ShowFor(app.Manager, app.Manager.Server("blog")!);
                 if (!await SaveForm<EditWindow>(Path.Combine(output, "edit.png"))) failures++;
-
-                // Whatever else is on screen, such as the notification, for a look.
-                Save(Screen.PrimaryScreen.Bounds, Path.Combine(output, "screen.png"));
             }
             catch (Exception e)
             {

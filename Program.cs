@@ -421,6 +421,8 @@ internal sealed class TrayApp : ApplicationContext
     internal UpdateCheck.Release? Update => update;
     internal TrayPanel Panel => panel;
     internal ContextMenuStrip ShowMenu(Point at) { menu.Show(at); return menu; }
+    /// Hiding the icon for a moment is the only way to take a balloon notification down.
+    internal void HideNotification() { tray.Visible = false; tray.Visible = true; }
 
     internal void Quit()
     {
