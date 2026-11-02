@@ -22,6 +22,7 @@ internal static class Program
         Application.SetCompatibleTextRenderingDefault(false);
         SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
         if (args.Contains("--smoke-test")) { Environment.ExitCode = SmokeTest.Run(); return; }
+        if (args.Length >= 2 && args[0] == "--screenshots") { Environment.ExitCode = Screenshots.Run(args[1]); return; }
 
         using var mutex = new Mutex(true, "GuruHat.ServerHat.Windows", out var first);
         if (!first)
@@ -411,7 +412,11 @@ internal sealed class TrayApp : ApplicationContext
         tray.Visible = false;
     }
 
-    private void Quit()
+    // For Screenshots.cs.
+    internal ServerManager Manager => manager;
+    internal ContextMenuStrip ShowMenu(Point at) { menu.Show(at); return menu; }
+
+    internal void Quit()
     {
         StopEverything();
         tray.Dispose();

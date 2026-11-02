@@ -1,0 +1,29 @@
+name: README screenshots
+# Run by hand (gh workflow run screenshots.yml); the PNGs come back as an artifact to
+# check and copy into docs/.
+on:
+  workflow_dispatch:
+jobs:
+  screenshots:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Publish application
+        shell: pwsh
+        run: |
+          dotnet publish ServerHat.csproj -c Release -o publish
+          if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
+      - name: Take screenshots
+        shell: pwsh
+        run: |
+          $app = Start-Process publish/ServerHat.exe -ArgumentList '--screenshots', 'screenshots' -PassThru -Wait
+          Get-ChildItem screenshots | Format-Table Name, Length
+          if ($app.ExitCode -ne 0) { throw "Screenshots failed: $($app.ExitCode)" }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: screenshots/
