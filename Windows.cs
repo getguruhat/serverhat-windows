@@ -233,7 +233,8 @@ internal sealed class EditWindow : Form
         };
         try
         {
-            if (original is not null) manager.Update(original.Id, config); else manager.Add(config);
+            // Saving here is the user's own change, so it counts as allowed.
+            if (original is not null) manager.Update(original.Id, config, approvedByUser: true); else manager.Add(config, approvedByUser: true);
             Close();
         }
         catch (ManagerError e) { error.Text = e.Message; }
@@ -282,5 +283,83 @@ internal sealed class EditWindow : Form
     {
         if (disposing) env.Font.Dispose();
         base.Dispose(disposing);
+    }
+}
+
+/// The same choice as the menu's Allow and Remove, for when the user clicks the notification.
+internal sealed class ApprovalWindow : Form
+{
+    private static ApprovalWindow? current;
+
+    public static void Ask(ServerManager manager, ServerConfig server)
+    {
+        if (!manager.NeedsApproval(server.Id)) return;
+        current?.Close();
+        current = new ApprovalWindow(manager, server);
+        current.FormClosed += (_, _) => current = null;
+        current.Show();
+        current.Activate();
+    }
+
+    /// Allows the server's current settings and starts it (restarts it, if it's running).
+    public static void Allow(ServerManager manager, string id)
+    {
+        manager.Approve(id);
+        try { manager.Restart(id); } catch (ManagerError) { } // shows in the server's status
+    }
+
+    private ApprovalWindow(ServerManager manager, ServerConfig server)
+    {
+        Text = "ServerHat";
+        Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+        Font = SystemFonts.MessageBoxFont;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = false;
+        MinimizeBox = false;
+        ShowInTaskbar = true;
+        TopMost = true;
+        StartPosition = FormStartPosition.CenterScreen;
+        AutoSize = true;
+        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+
+        var details = $"Command: {ServerManager.CommandLine(server)}\nFolder: {server.Cwd}";
+        if (server.Env.Count > 0) details += "\nEnvironment: " + string.Join(", ", server.Env.Keys.OrderBy(k => k, StringComparer.Ordinal));
+        var grid = new TableLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 1, Padding = new Padding(16) };
+        grid.Controls.Add(new Label { Text = $"Allow {server.Name} to run?", AutoSize = true, Font = new Font(Font.FontFamily, Font.Size * 1.25f, FontStyle.Bold), UseMnemonic = false, Margin = new Padding(0, 0, 0, 10) });
+        grid.Controls.Add(new TextBox
+        {
+            Text = details.Replace("\n", "\r\n"), Multiline = true, ReadOnly = true, WordWrap = true, BorderStyle = BorderStyle.None,
+            BackColor = SystemColors.Control, Width = 480, Height = 18 * (details.Length / 70 + details.Count(c => c == '\n') + 2),
+            Font = new Font("Consolas", 9.5f), TabStop = false,
+        });
+        grid.Controls.Add(new Label
+        {
+            Text = "It was added or changed through ServerHat's API (for example by Claude Code or Codex) or in servers.json. It will run as you.",
+            AutoSize = true, MaximumSize = new Size(480, 0), UseMnemonic = false, Margin = new Padding(0, 10, 0, 0),
+        });
+
+        var allow = new Button { Text = "Allow", AutoSize = true, MinimumSize = new Size(80, 0) };
+        var remove = new Button { Text = "Remove", AutoSize = true, MinimumSize = new Size(80, 0) };
+        var later = new Button { Text = "Later", AutoSize = true, MinimumSize = new Size(80, 0) };
+        var shown = ServerManager.Fingerprint(server);
+        allow.Click += (_, _) =>
+        {
+            Close();
+            // Only allow what this window showed; if it changed meanwhile, show the new settings.
+            if (manager.Server(server.Id) is not { } now) return;
+            if (ServerManager.Fingerprint(now) == shown) Allow(manager, server.Id); else Ask(manager, now);
+        };
+        remove.Click += (_, _) => { Close(); try { manager.Remove(server.Id); } catch (ManagerError) { } };
+        later.Click += (_, _) => Close();
+        var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 14, 0, 0) };
+        buttons.Controls.Add(later);
+        buttons.Controls.Add(remove);
+        buttons.Controls.Add(allow);
+        grid.Controls.Add(buttons);
+        Controls.Add(grid);
+        // Enter doesn't allow by accident; Esc is Later.
+        CancelButton = later;
+        Shown += (_, _) => later.Focus();
     }
 }

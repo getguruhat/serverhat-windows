@@ -14,14 +14,11 @@ macOS version: https://github.com/getguruhat/serverhat-macos. Both use the same
 
 ### Not on Windows yet
 
-ServerHat for Windows 0.2.1 has the same name and version as the Mac app, but not yet all
-of its features. These are macOS-only for now:
+ServerHat for Windows 0.2.3 has the same name, `servers.json` and core API as the Mac app,
+but not yet all of its features. These are macOS-only for now:
 
-- **Command approval.** On Windows, a server added through the API or by editing
-  `servers.json` can start right away, without asking you. Only run agents and scripts
-  you trust with the API token.
 - The built-in MCP server (`ServerHat --mcp`). Agents use the HTTP API below instead.
-- Notifications, project import (`package.json`, Procfile, Docker Compose), HTTP health
+- Crash notifications, project import (`package.json`, Procfile, Docker Compose), HTTP health
   checks and the `unhealthy` state, restart after a crash, and export.
 
 ## What it does
@@ -29,8 +26,10 @@ of its features. These are macOS-only for now:
 - A globe in the notification area, with a list of your servers. Each shows whether it's
   **running**, **stopped**, **crashed**, **failed** to start or has its **port in use**,
   and has Start/Stop, Restart, Open in browser, View logs, Edit and Remove. **Start all**
-  and **Stop all** are at the top. A green dot on the globe means servers are running; a
-  red one means one crashed.
+  and **Stop all** are at the top. A green dot on the globe means servers are running, an
+  orange one that a command is waiting for your approval, and a red one that one crashed.
+- Asks you before running a command that Claude Code, Codex or a script added or changed
+  (see [Approval](#approval)).
 - Notices when a server crashes (and shows its last line of output) and when its port is
   already taken by something else (and which process that is).
 - Keeps a log per server, in the app and in `%LOCALAPPDATA%\ServerHat\Logs\<id>.log`.
@@ -62,6 +61,9 @@ Click the globe (left or right click) to open the menu. Each server's submenu ha
 Stop, Restart, Open in browser, View logs, Edit, Open folder and Remove; when something else
 holds its port, it also offers to end that process. At the bottom are **Add server**,
 **Import .claude\launch.json**, **Open servers.json**, **About ServerHat** and **Quit**.
+
+A server waiting for your approval shows its full command, folder and environment
+variable names right in the menu, with **Allow** and **Remove**; see [Approval](#approval).
 
 In a server's Edit window, **Start this server when ServerHat starts** makes it start with
 ServerHat, and **Open ServerHat when I sign in to Windows** makes that happen at sign-in
@@ -152,8 +154,9 @@ macOS version, so a script or agent that works with one works with the other.
 - Request bodies must be JSON with `Content-Type: application/json`, at most 1 MB.
 - The port is opened exclusively, so no other program can listen on it alongside ServerHat.
 
-Anyone holding the token can run commands as you, which is what the API is for. Keep it
-out of repositories and logs.
+Anyone holding the token can add and control servers, which is what the API is for, but
+a new or changed command only runs once you allow it (see [Approval](#approval)). Keep the
+token out of repositories and logs.
 
 ### Setup for the examples
 
@@ -184,7 +187,7 @@ set /p TOKEN=<"%APPDATA%\ServerHat\api-token"
 | `PATCH /v1/servers/{id}` | Change some fields. `null` clears `port` or `url`. |
 | `PUT /v1/servers/{id}` | Replace all fields. |
 | `DELETE /v1/servers/{id}` | Stop and remove a server. |
-| `POST /v1/servers/{id}/start` | Start it. `409` if its port is already in use. |
+| `POST /v1/servers/{id}/start` | Start it. `409` if its port is already in use, `403` if it's waiting for approval. |
 | `POST /v1/servers/{id}/stop` | Stop it (Ctrl+Break to its process group, then its whole Job Object is ended after 5 s). |
 | `POST /v1/servers/{id}/restart` | Stop it, then start it again. |
 | `GET /v1/servers/{id}/logs?lines=200` | The last lines of its output (up to 5000), plus the log file path. |
@@ -193,7 +196,8 @@ set /p TOKEN=<"%APPDATA%\ServerHat\api-token"
 | `POST /v1/reload` | Re-read `servers.json` now. |
 
 Add `?wait=<seconds>` (up to 60) to start, stop and restart to get the answer once the
-server is running, stopped or has failed, instead of right away.
+server is running, stopped or has failed, instead of right away. For a server waiting for
+approval, start and restart first wait that long for you to click Allow.
 
 Each server in a response has its settings plus:
 
@@ -208,6 +212,23 @@ Each server in a response has its settings plus:
 (something else holds the port; `detail` and `pid` name it) or `failed` (couldn't be
 launched, for example command not found). Errors come back as `{"error": "…"}` with a
 4xx status.
+
+### Approval
+
+A server added through the API, or by editing `servers.json`, can't start until you allow
+it. The same goes for an existing server whose `command`, `args`, `cwd` or `env` changes
+(name, port, url and `startAtLogin` don't count). ServerHat shows one notification for each
+pending command fingerprint; it shows the command and folder, and clicking it opens
+**Allow**, **Remove** and **Later** choices. The menu shows the server with its full
+command, folder and environment names, and **Allow** and **Remove**. Servers you add or
+edit in ServerHat's own windows, or import from its menu, count as allowed. So do the
+servers you already had when you updated to a version with approvals.
+
+Until you allow it, `start` and `restart` answer `403` with an explanation. Add
+`?wait=<seconds>` and they wait that long for you to click Allow, then go ahead. A
+server waiting for you has `"needsApproval": true` in API responses. ServerHat keeps what
+you've allowed in the registry (`approvedCommands` under
+`HKEY_CURRENT_USER\Software\GuruHat\ServerHat`), not in `servers.json`.
 
 ### Examples
 
@@ -261,11 +282,11 @@ publish\ServerHat.exe --smoke-test   # writes smoke-test.log; exit code 0 means 
 The smoke test runs the real server manager and API in a temporary folder: it starts a
 server through a `.cmd` shim, checks it's running, that Stop ends its whole process tree,
 that crashes, missing commands and ports in use are reported, that arguments survive
-`cmd.exe` quoting, that edits to `servers.json` are picked up, and that the API's answers
-match the macOS version's bytes.
+`cmd.exe` quoting, that edits to `servers.json` are picked up, that new and changed
+commands wait for approval, and that the API's answers match the macOS version's bytes.
 
 To publish a release, set the version in `ServerHat.csproj` and `installer.iss`, write
-`RELEASE_NOTES.md`, and push a matching tag, such as `git tag v0.2.1 && git push origin v0.2.1`.
+`RELEASE_NOTES.md`, and push a matching tag, such as `git tag v0.2.3 && git push origin v0.2.3`.
 
 The code:
 

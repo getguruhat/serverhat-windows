@@ -311,16 +311,20 @@ internal sealed class ApiServer
                 case ("POST", 3) when route[0] == "servers" && route[2] is "start" or "stop" or "restart":
                 {
                     var id = route[1];
+                    if (manager.Server(id) is null) throw new ManagerError($"no server \"{id}\"", 404);
+                    var wait = Math.Min(60, request.Query.TryGetValue("wait", out var text) && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var w) ? w : 0);
+                    if (route[2] != "stop" && manager.NeedsApproval(id) && wait > 0)
+                    {
+                        // Give the user the wait time to click Allow, then go ahead (or explain).
+                        manager.AskForApproval(id);
+                        await WaitForApproval(id, wait);
+                    }
                     switch (route[2])
                     {
                         case "start": manager.Start(id); break;
-                        case "stop":
-                            if (manager.Server(id) is null) throw new ManagerError($"no server \"{id}\"", 404);
-                            manager.Stop(id);
-                            break;
+                        case "stop": manager.Stop(id); break;
                         default: manager.Restart(id); break;
                     }
-                    var wait = Math.Min(60, request.Query.TryGetValue("wait", out var text) && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var w) ? w : 0);
                     await WaitUntilSettled(id, wait);
                     return manager.Server(id) is { } server ? new Response(200, Describe(server)) : Response.Error(404, $"no server \"{id}\"");
                 }
@@ -368,6 +372,13 @@ internal sealed class ApiServer
         }
     }
 
+    /// Returns once the user has allowed the server (or it's gone), or after `seconds`.
+    private async Task WaitForApproval(string id, double seconds)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(double.IsNaN(seconds) ? 0 : seconds);
+        while (DateTime.UtcNow < deadline && manager.NeedsApproval(id)) await Task.Delay(250);
+    }
+
     /// Returns once the server is no longer starting or stopping, or after `seconds`.
     private async Task WaitUntilSettled(string id, double seconds)
     {
@@ -413,6 +424,11 @@ internal sealed class ApiServer
         if (state.StartedAt is { } started) status["startedAt"] = started.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
         if (state.ExitCode is { } code) status["exitCode"] = code;
         json["status"] = status;
+        if (manager.NeedsApproval(server.Id))
+        {
+            json["needsApproval"] = true;
+            json["approvalNote"] = "New or changed command: it can't start until the user clicks Allow in the ServerHat menu.";
+        }
         json["log"] = manager.Log(server.Id).FilePath;
         if (server.OpenUrl is { } url) json["openURL"] = url;
         return json;

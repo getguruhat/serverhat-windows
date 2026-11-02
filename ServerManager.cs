@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Win32.SafeHandles;
 using Timer = System.Windows.Forms.Timer;
 
@@ -13,6 +15,11 @@ internal sealed class ServerManager
     public string? ConfigError { get; private set; }
     /// Raised after anything a person would see changes: a state, the list, an error.
     public event Action? Changed;
+    /// Raised once per pending command fingerprint, to show a notification for it.
+    public event Action<ServerConfig>? ApprovalNeeded;
+    /// Fingerprints of what the user has allowed to run. See `NeedsApproval`.
+    private HashSet<string> approved = [];
+    private readonly HashSet<string> askedForApproval = [];
 
     private readonly Dictionary<string, ServerState> states = [];
     private readonly ConfigStore store = new();
@@ -43,6 +50,18 @@ internal sealed class ServerManager
         store.OnChange = ConfigChangedOnDisk;
         store.Watch();
         foreach (var server in Servers) states[server.Id] = new ServerState();
+        if (Settings.ApprovedCommands is { } saved)
+        {
+            approved = [.. saved];
+        }
+        else
+        {
+            // First run with approvals: everything already set up counts as allowed.
+            approved = [.. Servers.Select(Fingerprint)];
+            SaveApprovals();
+        }
+        // After the tray has subscribed to ApprovalNeeded.
+        context.Post(_ => AskForPendingApprovals(), null);
         ticker.Tick += (_, _) => Tick();
         ticker.Start();
         foreach (var server in Servers.Where(s => s.StartAtLogin).ToList())
@@ -69,7 +88,7 @@ internal sealed class ServerManager
 
     // MARK: Editing
 
-    public ServerConfig Add(ServerConfig server)
+    public ServerConfig Add(ServerConfig server, bool approvedByUser = false)
     {
         server = server.Copy();
         if (server.Id.Length == 0) server.Id = ServerConfig.Slug(server.Name);
@@ -77,13 +96,15 @@ internal sealed class ServerManager
         if (Server(server.Id) is not null) throw new ManagerError($"a server with id \"{server.Id}\" already exists", 409);
         Servers.Add(server);
         states[server.Id] = new ServerState();
+        if (approvedByUser) Approve(server.Id);
         Save();
         RefreshPort(server.Id);
+        AskForPendingApprovals();
         return server;
     }
 
     /// Replaces a server's settings. A running server keeps its old settings until it restarts.
-    public ServerConfig Update(string id, ServerConfig updated)
+    public ServerConfig Update(string id, ServerConfig updated, bool approvedByUser = false)
     {
         var index = Servers.FindIndex(s => s.Id == id);
         if (index < 0) throw new ManagerError($"no server \"{id}\"", 404);
@@ -91,7 +112,9 @@ internal sealed class ServerManager
         updated.Id = id;
         if (updated.Problem is { } problem) throw new ManagerError(problem);
         Servers[index] = updated;
+        if (approvedByUser) Approve(id);
         Save();
+        AskForPendingApprovals();
         return updated;
     }
 
@@ -107,7 +130,7 @@ internal sealed class ServerManager
 
     /// Adds every configuration in a `.claude/launch.json` that isn't already here
     /// (same folder, command and arguments). Returns the servers it added.
-    public List<ServerConfig> ImportLaunchJson(string path)
+    public List<ServerConfig> ImportLaunchJson(string path, bool approvedByUser = false)
     {
         List<ServerConfig> found;
         try { found = LaunchJsonImporter.Servers(path); }
@@ -124,7 +147,7 @@ internal sealed class ServerManager
             var baseId = candidate.Id;
             var n = 2;
             while (Server(candidate.Id) is not null) candidate.Id = $"{baseId}-{n++}";
-            added.Add(Add(candidate));
+            added.Add(Add(candidate, approvedByUser));
         }
         return added;
     }
@@ -154,14 +177,75 @@ internal sealed class ServerManager
             states[server.Id] = new ServerState();
             RefreshPort(server.Id);
         }
+        AskForPendingApprovals();
         Changed?.Invoke();
     }
+
+    // MARK: Approval
+
+    /// True when a server's folder, command, arguments or environment is something the
+    /// user hasn't allowed yet: it was added or changed through the API (so by an agent)
+    /// or by editing servers.json. It can't start until the user clicks Allow. Changes
+    /// made in ServerHat's own windows count as allowed.
+    public bool NeedsApproval(string id) => Server(id) is { } server && !approved.Contains(Fingerprint(server));
+
+    public List<ServerConfig> PendingApprovals => Servers.Where(s => NeedsApproval(s.Id)).ToList();
+
+    public void Approve(string id)
+    {
+        if (Server(id) is not { } server) return;
+        // Forget approvals for settings no server has any more.
+        var current = new HashSet<string>(Servers.Select(Fingerprint));
+        var fingerprint = Fingerprint(server);
+        approved.IntersectWith(current);
+        approved.Add(fingerprint);
+        askedForApproval.Remove(fingerprint);
+        SaveApprovals();
+        Changed?.Invoke();
+    }
+
+    /// Sends one review notification for each pending command fingerprint.
+    public void AskForApproval(string id)
+    {
+        if (Server(id) is not { } server || !NeedsApproval(id) || ApprovalNeeded is null) return;
+        if (!askedForApproval.Add(Fingerprint(server))) return;
+        ApprovalNeeded(server);
+    }
+
+    private void AskForPendingApprovals()
+    {
+        var pending = PendingApprovals;
+        askedForApproval.IntersectWith(pending.Select(Fingerprint));
+        foreach (var server in pending) AskForApproval(server.Id);
+    }
+
+    private void SaveApprovals()
+    {
+        try { Settings.ApprovedCommands = approved.OrderBy(f => f, StringComparer.Ordinal).ToList(); }
+        catch (Exception e) when (e is System.Security.SecurityException or IOException or UnauthorizedAccessException) { }
+    }
+
+    public static string Fingerprint(ServerConfig server)
+    {
+        var parts = new[] { server.WorkingDirectory, server.Command }.Concat(server.Args)
+            .Concat(server.Env.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value}"));
+        using var sha = SHA256.Create();
+        var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(Json.Write(parts.Cast<object?>().ToList())));
+        return string.Concat(hash.Select(b => b.ToString("x2", CultureInfo.InvariantCulture)));
+    }
+
+    public static string CommandLine(ServerConfig server) => string.Join(" ", new[] { server.Command }.Concat(server.Args).Select(Spawner.Quote));
 
     // MARK: Running
 
     public void Start(string id)
     {
         var server = Server(id) ?? throw new ManagerError($"no server \"{id}\"", 404);
+        if (NeedsApproval(id))
+        {
+            AskForApproval(id);
+            throw new ManagerError($"Approval needed for {server.Name}: {CommandLine(server)} in {server.Cwd}. Click its ServerHat notification to review the command and Allow it, or open the ServerHat menu.", 403);
+        }
         if (running.TryGetValue(id, out var current))
         {
             // Start while it's still stopping means "start it again once it has stopped".
@@ -181,8 +265,7 @@ internal sealed class ServerManager
         }
 
         var log = Log(id);
-        var commandLine = string.Join(" ", new[] { server.Command }.Concat(server.Args).Select(Spawner.Quote));
-        log.BeginRun($"=== {Timestamp()} Starting in {server.Cwd}: {commandLine}");
+        log.BeginRun($"=== {Timestamp()} Starting in {server.Cwd}: {CommandLine(server)}");
         Spawned spawned;
         try
         {
@@ -261,6 +344,7 @@ internal sealed class ServerManager
     public void Restart(string id)
     {
         if (Server(id) is null) throw new ManagerError($"no server \"{id}\"", 404);
+        if (NeedsApproval(id)) Start(id); // explains, without stopping the old one
         if (running.ContainsKey(id))
         {
             Stop(id);
@@ -275,7 +359,7 @@ internal sealed class ServerManager
 
     public void StartAll()
     {
-        foreach (var server in Servers.Where(s => !running.ContainsKey(s.Id)).ToList())
+        foreach (var server in Servers.Where(s => !running.ContainsKey(s.Id) && !NeedsApproval(s.Id)).ToList())
         {
             try { Start(server.Id); } catch (ManagerError) { }
         }
