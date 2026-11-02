@@ -146,7 +146,9 @@ internal sealed class EditWindow : Form
 
         var grid = new TableLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 3, Padding = new Padding(16) };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 340));
+        // In pixels, so scaled to the display like the fonts are.
+        var scale = DeviceDpi / 96f;
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 340 * scale));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         var row = 0;
         void Field(string label, Control box, string? hint = null, Control? extra = null)
@@ -167,7 +169,7 @@ internal sealed class EditWindow : Form
         Field("Port", port, "optional");
         Field("URL", url, "optional, defaults to http://127.0.0.1:<port>");
         Field("Environment", env);
-        grid.Controls.Add(new Label { Text = "One NAME=value per line. Arguments split on spaces; use quotes for spaces inside one.", AutoSize = true, ForeColor = SystemColors.GrayText, MaximumSize = new Size(440, 0) }, 1, row++);
+        grid.Controls.Add(new Label { Text = "One NAME=value per line. Arguments split on spaces; use quotes for spaces inside one.", AutoSize = true, ForeColor = SystemColors.GrayText, MaximumSize = new Size((int)(340 * scale), 0) }, 1, row++);
         grid.Controls.Add(startAtLogin, 1, row++);
         grid.Controls.Add(openAtLogin, 1, row++);
         grid.Controls.Add(error, 1, row++);

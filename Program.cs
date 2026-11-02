@@ -243,6 +243,13 @@ internal sealed class TrayApp : ApplicationContext
         menu.Items.Add(new ToolStripMenuItem("Import .claude\\launch.json…", null, (_, _) => ImportLaunchJson()));
         menu.Items.Add(new ToolStripMenuItem("Open servers.json", null, (_, _) => Program.OpenFile(Paths.ConfigFile)));
         menu.Items.Add(new ToolStripSeparator());
+        var atLogin = new ToolStripMenuItem("Open ServerHat when I sign in") { Checked = Settings.OpenAtLogin };
+        atLogin.Click += (_, _) =>
+        {
+            try { Settings.OpenAtLogin = !Settings.OpenAtLogin; }
+            catch (Exception e) when (e is UnauthorizedAccessException or System.Security.SecurityException or IOException) { MessageBox.Show(e.Message, "ServerHat"); }
+        };
+        menu.Items.Add(atLogin);
         if (update is { } available)
             menu.Items.Add(new ToolStripMenuItem($"ServerHat {available.Version} is available ›", null, (_, _) => AboutWindow.Open(available.Page)));
         menu.Items.Add(new ToolStripMenuItem("About ServerHat", null, (_, _) => AboutWindow.ShowShared()));
