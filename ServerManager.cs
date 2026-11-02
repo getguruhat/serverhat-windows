@@ -38,6 +38,8 @@ internal sealed class ServerManager
         public bool StopRequested { get; set; }
         public bool WaitingForPort { get; set; } = true;
         public bool Reaped { get; set; }
+        /// Set on the UI thread after the last of the output has been added to the log.
+        public TaskCompletionSource<bool> OutputEnded { get; } = new();
         public DateTime Started { get; } = DateTime.UtcNow;
     }
 
@@ -280,9 +282,9 @@ internal sealed class ServerManager
 
         var process = new RunningProcess(spawned) { WaitingForPort = server.Port is not null };
         running[id] = process;
-        ReadOutput(spawned.Output, log);
+        ReadOutput(spawned.Output, log, process.OutputEnded);
         process.ExitWait = ThreadPool.RegisterWaitForSingleObject(new Native.ProcessWaitHandle(spawned.Process),
-            (_, _) => context.Post(_ => Reap(id, process), null), null, Timeout.Infinite, true);
+            (_, _) => context.Post(_ => ReapWhenOutputEnds(id, process), null), null, Timeout.Infinite, true);
         SetState(id, new ServerState
         {
             Status = server.Port is null ? ServerStatus.Running : ServerStatus.Starting,
@@ -293,7 +295,7 @@ internal sealed class ServerManager
     }
 
     /// Reads the server's output on a thread of its own and hands it to the UI thread.
-    private void ReadOutput(SafeFileHandle output, LogBuffer log)
+    private void ReadOutput(SafeFileHandle output, LogBuffer log, TaskCompletionSource<bool> ended)
     {
         var thread = new Thread(() =>
         {
@@ -309,6 +311,8 @@ internal sealed class ServerManager
                 Array.Copy(buffer, data, count);
                 context.Post(_ => log.Append(data), null);
             }
+            // Posted after the last Append, so it runs after it.
+            context.Post(_ => ended.TrySetResult(true), null);
         }) { IsBackground = true, Name = "ServerHat output" };
         thread.Start();
     }
@@ -387,6 +391,14 @@ internal sealed class ServerManager
             Native.TerminateJobObject(process.Spawned.Job, 1);
             process.ExitWait?.Unregister(null);
         }
+    }
+
+    /// The crash detail quotes the last line of output, which can arrive just after the exit.
+    /// Child processes left behind can keep the output open, so it waits 200 ms at most.
+    private async void ReapWhenOutputEnds(string id, RunningProcess process)
+    {
+        await Task.WhenAny(process.OutputEnded.Task, Task.Delay(200));
+        Reap(id, process);
     }
 
     private void Reap(string id, RunningProcess process)
