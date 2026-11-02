@@ -45,6 +45,7 @@ internal static class Screenshots
         new ConfigStore().Save(new ConfigFile { Servers = [.. allowed, pending] });
 
         var failures = 0;
+        TrayApp.Quiet = true;
         var app = new TrayApp();
         var start = new Timer { Interval = 4000 };
         start.Tick += async (_, _) =>
@@ -52,12 +53,6 @@ internal static class Screenshots
             start.Stop();
             try
             {
-                // Whatever else is on screen, such as the approval notification, for a look,
-                // then without the notification, which would cover the panel.
-                Save(Screen.PrimaryScreen.Bounds, Path.Combine(output, "screen.png"));
-                app.HideNotification();
-                await Task.Delay(800);
-
                 var area = Screen.PrimaryScreen.WorkingArea;
                 var panel = app.Panel;
                 panel.StayOpen = true;
@@ -82,6 +77,12 @@ internal static class Screenshots
 
                 EditWindow.ShowFor(app.Manager, app.Manager.Server("blog")!);
                 if (!await SaveForm<EditWindow>(Path.Combine(output, "edit.png"))) failures++;
+
+                // The approval notification, and whatever else is on screen, for a look.
+                TrayApp.Quiet = false;
+                app.AskForApproval(app.Manager.Server("blog")!);
+                await Task.Delay(1500);
+                Save(Screen.PrimaryScreen.Bounds, Path.Combine(output, "screen.png"));
             }
             catch (Exception e)
             {

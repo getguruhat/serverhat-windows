@@ -289,8 +289,9 @@ internal sealed class TrayApp : ApplicationContext
     private void Allow(string id) => ApprovalWindow.Allow(manager, id);
 
     /// One notification per pending command fingerprint; clicking it opens the review.
-    private void AskForApproval(ServerConfig server)
+    internal void AskForApproval(ServerConfig server)
     {
+        if (Quiet) return;
         var body = $"{ServerManager.CommandLine(server)}\nin {server.Cwd}. Click to review and allow.";
         balloonServer = server.Id;
         tray.ShowBalloonTip(15000, Short($"Review command for {server.Name}", 63), Short(body, 255), ToolTipIcon.Warning);
@@ -421,8 +422,9 @@ internal sealed class TrayApp : ApplicationContext
     internal UpdateCheck.Release? Update => update;
     internal TrayPanel Panel => panel;
     internal ContextMenuStrip ShowMenu(Point at) { menu.Show(at); return menu; }
-    /// Hiding the icon for a moment is the only way to take a balloon notification down.
-    internal void HideNotification() { tray.Visible = false; tray.Visible = true; }
+    /// No approval notifications, for Screenshots.cs: on Windows 11 one stays over the panel
+    /// for its whole time, whatever the app does.
+    internal static bool Quiet;
 
     internal void Quit()
     {
