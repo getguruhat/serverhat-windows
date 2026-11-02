@@ -66,7 +66,7 @@ internal static class SmokeTest
 
         // The checks and the exact bytes the macOS version sends.
         var health = await Send("GET", "/v1/health", auth: false);
-        Check(health.Raw.StartsWith("HTTP/1.1 200 No Error\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: 40\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n")
+        Check(health.Raw.StartsWith("HTTP/1.1 200 No Error\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: 41\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n")
               && health.Body == "{\n  \"app\" : \"ServerHat\",\n  \"ok\" : true\n}\n", "GET /v1/health answers without a token, byte for byte like macOS");
         Check((await Send("GET", "/v1/servers", auth: false)).Status == 401, "no token: 401");
         Check((await Send("GET", "/v1/servers", headers: ["Authorization: Bearer " + new string('0', 64)], auth: false)).Status == 401, "wrong token: 401");
