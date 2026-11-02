@@ -9,6 +9,8 @@ work (a Node script, `npm run dev`, `python -m http.server`, anything with a com
 line), so you never have to keep a terminal window open for them. It also has a local API,
 so Claude Code, Codex or your own scripts can add and control servers for you.
 
+<img src="docs/menu.png" width="289" alt="ServerHat's menu in the Windows notification area: five servers with their status, one of them waiting for approval with its command, folder and environment names, and Allow and Remove">
+
 macOS version: https://github.com/getguruhat/serverhat-macos. Both use the same
 `servers.json` format and the same core API.
 
@@ -64,6 +66,8 @@ holds its port, it also offers to end that process. At the bottom are **Add serv
 
 A server waiting for your approval shows its full command, folder and environment
 variable names right in the menu, with **Allow** and **Remove**; see [Approval](#approval).
+
+<img src="docs/edit.png" width="541" alt="The Edit window: name, folder, command, arguments, port, URL and environment variables">
 
 In a server's Edit window, **Start this server when ServerHat starts** makes it start with
 ServerHat, and **Open ServerHat when I sign in to Windows** makes that happen at sign-in
@@ -224,6 +228,8 @@ command, folder and environment names, and **Allow** and **Remove**. Servers you
 edit in ServerHat's own windows, or import from its menu, count as allowed. So do the
 servers you already had when you updated to a version with approvals.
 
+<img src="docs/approval.png" width="515" alt="The approval window: Allow Blog to run? with its command, folder and environment names, and Allow, Remove and Later">
+
 Until you allow it, `start` and `restart` answer `403` with an explanation. Add
 `?wait=<seconds>` and they wait that long for you to click Allow, then go ahead. A
 server waiting for you has `"needsApproval": true` in API responses. ServerHat keeps what
@@ -288,16 +294,22 @@ commands wait for approval, and that the API's answers match the macOS version's
 To publish a release, set the version in `ServerHat.csproj` and `installer.iss`, write
 `RELEASE_NOTES.md`, and push a matching tag, such as `git tag v0.2.3 && git push origin v0.2.3`.
 
+`ServerHat.exe --screenshots <folder>` takes the pictures in `docs/`, with a few example
+servers. Run the **README screenshots** workflow (`gh workflow run screenshots.yml`) to
+take them on Windows, then copy the ones you want from its artifact.
+
 The code:
 
 - `Config.cs`: the servers.json format, the file watcher, and the launch.json importer.
 - `Json.cs`: JSON written in exactly the macOS version's layout.
-- `ServerManager.cs`: starting and stopping servers, crash and port detection.
+- `ServerManager.cs`: starting and stopping servers, crash and port detection, command
+  approval.
 - `Processes.cs`: `CreateProcess` with a Job Object, `PATH`/`PATHEXT` lookup, argument
   quoting for programs and batch files, and the TCP listener table.
 - `ApiServer.cs`, `TokenFile.cs`: the local HTTP API and its token.
-- `Program.cs`: the notification-area icon and menu. `Windows.cs`: the log and edit
-  windows. `AboutWindow.cs`: the About window.
+- `Program.cs`: the notification-area icon and menu. `Windows.cs`: the log, edit and
+  approval windows. `AboutWindow.cs`: the About window.
+- `SmokeTest.cs`, `Screenshots.cs`: `--smoke-test` and `--screenshots`.
 
 ## Support
 
