@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing.Drawing2D;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using Timer = System.Windows.Forms.Timer;
 
@@ -53,6 +52,7 @@ internal sealed class TrayApp : ApplicationContext
     private readonly ServerManager manager;
     private readonly ApiServer api;
     private readonly NotifyIcon tray;
+    private readonly TrayPanel panel;
     private readonly ContextMenuStrip menu = new() { ShowImageMargin = true };
     private readonly Timer refresh = new() { Interval = 500 };
     /// The first update check runs a minute after launch, then once a day.
@@ -84,11 +84,13 @@ internal sealed class TrayApp : ApplicationContext
             if (balloonServer is { } id && manager.Server(id) is { } server) ApprovalWindow.Ask(manager, server);
         };
         menu.Opening += (_, e) => { Build(); e.Cancel = false; };
-        // Left click opens the same menu, the way a menu bar icon would.
+        // Left click opens the panel, like the macOS menu bar panel; right click, the menu.
+        panel = new TrayPanel(this);
         tray.MouseUp += (_, e) =>
         {
-            if (e.Button == MouseButtons.Left)
-                typeof(NotifyIcon).GetMethod("ShowContextMenu", BindingFlags.Instance | BindingFlags.NonPublic)?.Invoke(tray, null);
+            if (e.Button != MouseButtons.Left) return;
+            if (panel.Visible) panel.HideNow();
+            else if (!panel.JustHidden) panel.ShowNear(Cursor.Position);
         };
         refresh.Tick += (_, _) => Refresh();
         refresh.Start();
@@ -349,21 +351,21 @@ internal sealed class TrayApp : ApplicationContext
         try { action(); } catch (ManagerError) { }
     }
 
-    private void ConfirmRemove(ServerConfig server)
+    internal void ConfirmRemove(ServerConfig server)
     {
         var answer = MessageBox.Show($"ServerHat stops it if it's running and forgets its settings. Its folder isn't touched.",
             $"Remove {server.Name}?", MessageBoxButtons.OKCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
         if (answer == DialogResult.OK) Try(() => manager.Remove(server.Id));
     }
 
-    private void ConfirmEnd(ServerConfig server, ServerState state, int pid)
+    internal void ConfirmEnd(ServerConfig server, ServerState state, int pid)
     {
         var answer = MessageBox.Show((state.Detail ?? "") + "\n\nServerHat didn't start it. Windows will end it right away, without saving anything it has open.",
             $"End the process using port {server.Port}?", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
         if (answer == DialogResult.OK) ServerManager.EndProcess(pid);
     }
 
-    private void ImportLaunchJson()
+    internal void ImportLaunchJson()
     {
         using var dialog = new OpenFileDialog
         {
@@ -409,11 +411,15 @@ internal sealed class TrayApp : ApplicationContext
         updateTimer.Stop();
         api.Stop();
         manager.Shutdown();
+        panel.Dispose();
         tray.Visible = false;
     }
 
-    // For Screenshots.cs.
+    // For the panel and Screenshots.cs.
     internal ServerManager Manager => manager;
+    internal string? ApiProblem => api.Problem;
+    internal UpdateCheck.Release? Update => update;
+    internal TrayPanel Panel => panel;
     internal ContextMenuStrip ShowMenu(Point at) { menu.Show(at); return menu; }
 
     internal void Quit()
