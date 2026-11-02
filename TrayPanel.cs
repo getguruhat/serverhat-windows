@@ -276,7 +276,7 @@ internal sealed class TrayPanel : Form
             FillRound(g, capsule, h / 2, colors.Card);
             StrokeRound(g, capsule, h / 2, colors.Stroke);
             var tx = capsule.Left + S(12);
-            Glyph(g, Glyphs.Globe, new Rectangle(tx, y, S(16), h), colors.Accent, f.GlyphSmall);
+            FilledGlyph(g, Glyphs.Globe, new Rectangle(tx, y + (h - S(16)) / 2, S(16), S(16)), colors.Accent, colors.Card, f.GlyphTiny);
             tx += S(22);
             var active = manager.States.Count(s => s.Status is ServerStatus.Running or ServerStatus.Starting);
             string? right = null;
@@ -500,7 +500,7 @@ internal sealed class TrayPanel : Form
         var textTop = y + (height - nameHeight - S(2) - detailHeight) / 2;
         if (g is not null)
         {
-            Glyph(g, StatusGlyph(state.Status), new Rectangle(x, y, S(22), height), color, f.GlyphStatus);
+            StatusIcon(g, state.Status, new Rectangle(x, y, S(22), height), color);
             Label(g, server.Name, f.Bold, colors.Text, new Rectangle(textX, textTop, textWidth, nameHeight), TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
         }
         var detailRect = new Rectangle(textX, textTop + nameHeight + S(2), textWidth, detailHeight);
@@ -584,7 +584,7 @@ internal sealed class TrayPanel : Form
 
         if (g is not null)
         {
-            Glyph(g, Glyphs.Lock, new Rectangle(x, y, S(22), head), colors.Orange, f.GlyphStatus);
+            Glyph(g, Glyphs.Hand, new Rectangle(x, y, S(22), head), colors.Orange, f.Symbol);
             Label(g, server.Name, f.Bold, colors.Text, new Rectangle(textX, y, textWidth, nameHeight), TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
             Label(g, subtitle, f.SmallMedium, colors.Orange, new Rectangle(textX, y + nameHeight + S(2), textWidth, subtitleHeight), TextFormatFlags.WordBreak);
             var box = new Rectangle(x, y + head + S(10), width, boxHeight);
@@ -648,14 +648,25 @@ internal sealed class TrayPanel : Form
         _ => colors.Grey,
     };
 
-    private static string StatusGlyph(ServerStatus status) => status switch
+    /// The Mac's symbols: bolt.fill, hourglass, exclamationmark.triangle.fill,
+    /// exclamationmark.circle.fill and globe.americas.
+    private void StatusIcon(Graphics g, ServerStatus status, Rectangle rect, Color color)
     {
-        ServerStatus.Running => Glyphs.Bolt,
-        ServerStatus.Starting or ServerStatus.Stopping => Glyphs.Clock,
-        ServerStatus.Crashed or ServerStatus.Failed => Glyphs.Warning,
-        ServerStatus.PortInUse => Glyphs.Error,
-        _ => Glyphs.Globe,
-    };
+        var f = F;
+        switch (status)
+        {
+            case ServerStatus.Running: Glyph(g, Glyphs.Bolt, rect, color, f.Emoji); break;
+            case ServerStatus.Starting or ServerStatus.Stopping: Glyph(g, Glyphs.Clock, rect, color, f.GlyphStatus); break;
+            case ServerStatus.Crashed or ServerStatus.Failed: Glyph(g, Glyphs.Warning, rect, color, f.GlyphStatus); break;
+            case ServerStatus.PortInUse:
+                var size = S(16);
+                var circle = new Rectangle(rect.X + (rect.Width - size) / 2, rect.Y + (rect.Height - size) / 2, size, size);
+                using (var brush = new SolidBrush(color)) g.FillEllipse(brush, circle);
+                Label(g, "!", f.SmallBold, colors.Card, circle, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                break;
+            default: Glyph(g, Glyphs.Globe, rect, color, f.GlyphStatus); break;
+        }
+    }
 
     // MARK: Pieces
 
@@ -703,6 +714,13 @@ internal sealed class TrayPanel : Form
         var color = Hot(rect) ? Mix(fill, mouseDown ? Color.Black : colors.Text, 0.1f) : fill;
         FillRound(g, rect, rect.Height / 2, color);
         Label(g, text, font, foreground, rect, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+    }
+
+    /// A glyph knocked out of a filled circle, for symbols the icon fonts only have as outlines.
+    private static void FilledGlyph(Graphics g, string glyph, Rectangle rect, Color fill, Color color, Font font)
+    {
+        using (var brush = new SolidBrush(fill)) g.FillEllipse(brush, rect);
+        Glyph(g, glyph, rect, color, font);
     }
 
     private static void Glyph(Graphics g, string glyph, Rectangle rect, Color color, Font font) =>
@@ -794,7 +812,7 @@ internal sealed class TrayPanel : Form
 
     private sealed class Fonts : IDisposable
     {
-        public Font Bold, Medium, Small, SmallMedium, SmallBold, Title, Mono, Glyph, GlyphSmall, GlyphTiny, GlyphStatus;
+        public Font Bold, Medium, Small, SmallMedium, SmallBold, Title, Mono, Glyph, GlyphSmall, GlyphTiny, GlyphStatus, Emoji, Symbol;
 
         public Fonts(float scale)
         {
@@ -812,19 +830,23 @@ internal sealed class TrayPanel : Form
             GlyphStatus = Make(icons, 16);
             GlyphSmall = Make(icons, 13);
             GlyphTiny = Make(icons, 10);
+            Emoji = Make("Segoe UI Emoji", 15);
+            Symbol = Make("Segoe UI Symbol", 15);
         }
 
         public void Dispose()
         {
-            foreach (var font in new[] { Bold, Medium, Small, SmallMedium, SmallBold, Title, Mono, Glyph, GlyphSmall, GlyphTiny, GlyphStatus }) font.Dispose();
+            foreach (var font in new[] { Bold, Medium, Small, SmallMedium, SmallBold, Title, Mono, Glyph, GlyphSmall, GlyphTiny, GlyphStatus, Emoji, Symbol }) font.Dispose();
         }
     }
 
-    /// Segoe MDL2 Assets / Segoe Fluent Icons code points.
+    /// Segoe MDL2 Assets / Segoe Fluent Icons code points, solid where the Mac's symbols are filled.
     private static class Glyphs
     {
-        public const string Add = "", More = "", Settings = "", Stop = "", Restart = "", Lock = "",
-            Chevron = "", Play = "", Globe = "", Error = "", Warning = "", Power = "",
-            Download = "", Clock = "", Bolt = "";
+        public const string Add = "", More = "", Settings = "", Stop = "", Restart = "",
+            Chevron = "", Play = "", Globe = "", Warning = "", Power = "",
+            Download = "", Clock = "";
+        // In Segoe UI Emoji and Segoe UI Symbol, which GDI draws in one color, filled.
+        public const string Bolt = "⚡", Hand = "✋";
     }
 }
