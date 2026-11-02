@@ -327,12 +327,7 @@ internal sealed class ApprovalWindow : Form
         if (server.Env.Count > 0) details += "\nEnvironment: " + string.Join(", ", server.Env.Keys.OrderBy(k => k, StringComparer.Ordinal));
         var grid = new TableLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 1, Padding = new Padding(16) };
         grid.Controls.Add(new Label { Text = $"Allow {server.Name} to run?", AutoSize = true, Font = new Font(Font.FontFamily, Font.Size * 1.25f, FontStyle.Bold), UseMnemonic = false, Margin = new Padding(0, 0, 0, 10) });
-        grid.Controls.Add(new TextBox
-        {
-            Text = details.Replace("\n", "\r\n"), Multiline = true, ReadOnly = true, WordWrap = true, BorderStyle = BorderStyle.None,
-            BackColor = SystemColors.Control, Width = 480, Height = 18 * (details.Length / 70 + details.Count(c => c == '\n') + 2),
-            Font = new Font("Consolas", 9.5f), TabStop = false,
-        });
+        grid.Controls.Add(new Label { Text = details, AutoSize = true, MaximumSize = new Size(480, 0), Font = new Font("Consolas", 9.5f), UseMnemonic = false });
         grid.Controls.Add(new Label
         {
             Text = "It was added or changed through ServerHat's API (for example by Claude Code or Codex) or in servers.json. It will run as you.",
