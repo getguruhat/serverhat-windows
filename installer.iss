@@ -1,5 +1,5 @@
 #define AppName "ServerHat"
-#define AppVersion "0.2.3"
+#define AppVersion "0.3.0"
 [Setup]
 AppId={{E89CC74B-BB7E-4305-BC06-B0161E8D3977}
 AppName={#AppName}
