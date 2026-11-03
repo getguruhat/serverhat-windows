@@ -16,7 +16,7 @@ namespace ServerHat;
 /// prints its arguments. `lwtest.cmd` puts a batch file in between, like npm.cmd.
 internal static class SmokeTest
 {
-    private const int ApiPort = 47391, ServerPort = 47392;
+    private const int ApiPort = 47391, ServerPort = 47392, McpPort = 47393;
     private static readonly List<string> log = [];
     private static int failures;
     private static string token = "";
@@ -175,6 +175,9 @@ internal static class SmokeTest
         File.WriteAllText(Paths.ConfigFile, good);
         await Task.Delay(1500);
 
+        // The MCP server, started the way Claude Code and Codex start it.
+        await Mcp(manager);
+
         // Quitting stops what ServerHat started.
         var again = await Send("POST", "/v1/servers/smoke/start?wait=30");
         Check(State(again) == "running", "start again: " + State(again));
@@ -246,6 +249,72 @@ internal static class SmokeTest
     }
 
     // MARK: HTTP
+
+    /// Runs `ServerHat.exe --mcp` with pipes for its input and output, pointed at the test's
+    /// folder, and goes through what an agent does: list, add, start once allowed, read logs, stop.
+    private static async Task Mcp(ServerManager manager)
+    {
+        var start = new ProcessStartInfo(Application.ExecutablePath, "--mcp")
+        {
+            UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+            StandardOutputEncoding = new UTF8Encoding(false),
+        };
+        start.EnvironmentVariables["SERVERHAT_SUPPORT_FOLDER"] = Paths.ConfigFolder;
+        using var mcp = Process.Start(start)!;
+        mcp.StandardInput.AutoFlush = true;
+        var nextId = 0L;
+        async Task<Dictionary<string, object?>?> Ask(string method, Dictionary<string, object?>? parameters = null)
+        {
+            var request = new Dictionary<string, object?> { ["jsonrpc"] = "2.0", ["id"] = ++nextId, ["method"] = method };
+            if (parameters is not null) request["params"] = parameters;
+            await mcp.StandardInput.WriteAsync(Json.Compact(request) + "\n");
+            var read = mcp.StandardOutput.ReadLineAsync();
+            if (await Task.WhenAny(read, Task.Delay(90000)) != read) { Fail("no MCP answer to " + method); return null; }
+            var line = await read;
+            return line is null ? null : Json.Parse(line) as Dictionary<string, object?>;
+        }
+        static object? At(object? value, params string[] keys)
+        {
+            foreach (var key in keys) value = value is Dictionary<string, object?> d && d.TryGetValue(key, out var v) ? v : null;
+            return value;
+        }
+        async Task<(bool Error, string Text)> Tool(string name, Dictionary<string, object?> args)
+        {
+            var answer = await Ask("tools/call", new() { ["name"] = name, ["arguments"] = args });
+            var text = (At(answer, "result", "content") as List<object?>)?.FirstOrDefault() is Dictionary<string, object?> c && c["text"] is string t ? t : "";
+            return (At(answer, "result", "isError") is true, text);
+        }
+
+        var hello = await Ask("initialize", new() { ["protocolVersion"] = "2025-06-18", ["capabilities"] = new Dictionary<string, object?>(), ["clientInfo"] = new Dictionary<string, object?> { ["name"] = "smoke", ["version"] = "1" } });
+        Check(At(hello, "result", "protocolVersion") as string == "2025-06-18" && At(hello, "result", "serverInfo", "name") as string == "serverhat", "MCP initialize answers as serverhat");
+        await mcp.StandardInput.WriteAsync("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n");
+        var tools = (At(await Ask("tools/list"), "result", "tools") as List<object?>)?.Select(t => At(t, "name") as string).ToList() ?? [];
+        Check(tools.Count == 10 && tools.Contains("start_server") && tools.Contains("get_logs"), "MCP lists 10 tools: " + string.Join(", ", tools));
+        var listed = await Tool("list_servers", []);
+        Check(!listed.Error && listed.Text.Contains("\"id\" : \"smoke\""), "MCP list_servers shows the servers");
+
+        var added = await Tool("add_server", new() { ["name"] = "Mcp", ["command"] = "lwtest", ["args"] = new List<object?> { McpPort.ToString() }, ["port"] = (long)McpPort, ["cwd"] = "~" });
+        Check(!added.Error && added.Text.Contains("\"needsApproval\" : true"), "MCP add_server adds a server that waits for approval");
+        var blocked = await Tool("start_server", new() { ["id"] = "mcp", ["wait"] = 0L });
+        Check(blocked.Error && blocked.Text.Contains("lwtest"), "MCP start_server before approval is refused and names the command: " + blocked.Text.Replace("\n", " "));
+        manager.Approve("mcp");
+        var started = await Tool("start_server", new() { ["id"] = "mcp" });
+        Check(!started.Error && started.Text.Contains("\"state\" : \"running\""), "MCP start_server waits until it's running");
+        await Task.Delay(500);
+        var logs = await Tool("get_logs", new() { ["id"] = "mcp", ["lines"] = 20L });
+        Check(!logs.Error && logs.Text.Contains("listening on " + McpPort), "MCP get_logs returns the server's output");
+        var stopped = await Tool("stop_server", new() { ["id"] = "mcp" });
+        Check(!stopped.Error && stopped.Text.Contains("\"state\" : \"stopped\""), "MCP stop_server stops it");
+        Check(!(await Tool("remove_server", new() { ["id"] = "mcp" })).Error && manager.Server("mcp") is null, "MCP remove_server removes it");
+        Check((await Tool("get_server", new() { ["id"] = "nope" })).Error, "MCP reports an unknown server as an error");
+        Check(At(await Ask("no/such/method"), "error", "code") is long code && code == -32601, "MCP answers an unknown method with -32601");
+
+        mcp.StandardInput.Close();
+        var exited = await Task.Run(() => mcp.WaitForExit(10000));
+        Check(exited && mcp.ExitCode == 0, "MCP exits when its input closes");
+        if (!exited) mcp.Kill();
+    }
 
     private sealed record Reply(int Status, string Raw, string Body, object? Json);
 

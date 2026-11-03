@@ -6,8 +6,11 @@ namespace ServerHat;
 /// Where ServerHat keeps its files. The smoke test points these at a temporary folder.
 internal static class Paths
 {
-    /// %APPDATA%\ServerHat: servers.json, api-token and api.json.
-    public static string ConfigFolder { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ServerHat");
+    /// %APPDATA%\ServerHat: servers.json, api-token and api.json. SERVERHAT_SUPPORT_FOLDER
+    /// points it somewhere else, as on macOS; the smoke test runs `--mcp` against its own folder.
+    public static string ConfigFolder { get; set; } = Environment.GetEnvironmentVariable("SERVERHAT_SUPPORT_FOLDER") is { Length: > 0 } folder
+        ? folder
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ServerHat");
     /// %LOCALAPPDATA%\ServerHat\Logs: one <id>.log per server.
     public static string LogFolder { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerHat", "Logs");
 

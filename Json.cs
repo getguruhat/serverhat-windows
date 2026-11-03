@@ -35,6 +35,54 @@ internal static class Json
         return text.ToString();
     }
 
+    /// The same values on one line with no spaces, for MCP messages: one JSON-RPC message per line.
+    public static string Compact(object? value)
+    {
+        var text = new StringBuilder();
+        WriteCompact(text, value);
+        return text.ToString();
+    }
+
+    private static void WriteCompact(StringBuilder text, object? value)
+    {
+        switch (value)
+        {
+            case IDictionary<string, object?> dict:
+                text.Append('{');
+                var first = true;
+                foreach (var key in dict.Keys.OrderBy(k => k, StringComparer.Ordinal))
+                {
+                    if (!first) text.Append(',');
+                    first = false;
+                    WriteString(text, key);
+                    text.Append(':');
+                    WriteCompact(text, dict[key]);
+                }
+                text.Append('}');
+                break;
+            case string or null or bool or int or long or double:
+                Write(text, value, 0);
+                break;
+            case IDictionary<string, string> strings:
+                WriteCompact(text, strings.ToDictionary(p => p.Key, p => (object?)p.Value));
+                break;
+            case System.Collections.IEnumerable list:
+                text.Append('[');
+                var firstItem = true;
+                foreach (var item in list)
+                {
+                    if (!firstItem) text.Append(',');
+                    firstItem = false;
+                    WriteCompact(text, item);
+                }
+                text.Append(']');
+                break;
+            default:
+                WriteString(text, value.ToString() ?? "");
+                break;
+        }
+    }
+
     private static void Write(StringBuilder text, object? value, int indent)
     {
         switch (value)
