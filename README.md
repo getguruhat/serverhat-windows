@@ -6,8 +6,9 @@ No account, no analytics, nothing leaves your PC.
 
 ServerHat starts, stops, restarts and opens the little web servers you run while you
 work (a Node script, `npm run dev`, `python -m http.server`, anything with a command
-line), so you never have to keep a terminal window open for them. It also has a local API,
-so Claude Code, Codex or your own scripts can add and control servers for you.
+line), so you never have to keep a terminal window open for them. Its built-in MCP server
+lets Claude Code and Codex start, stop, restart and debug your servers for you, with your
+approval, and a local API does the same for your own scripts.
 
 <img src="docs/panel.png" width="360" alt="ServerHat's panel: two servers running with their addresses, one stopped, one crashed with its error, and one waiting for approval with its command, folder and environment names, and Allow and Remove"> <img src="docs/panel-dark.png" width="360" alt="The same panel in dark mode">
 
@@ -16,10 +17,10 @@ macOS version: https://github.com/getguruhat/serverhat-macos. Both use the same
 
 ### Not on Windows yet
 
-ServerHat for Windows 0.2.3 has the same name, `servers.json` and core API as the Mac app,
-but not yet all of its features. These are macOS-only for now:
+ServerHat for Windows has the same name, `servers.json`, core API and MCP server as the Mac
+app, but not yet all of its features. These are macOS-only for now:
 
-- The built-in MCP server (`ServerHat --mcp`). Agents use the HTTP API below instead.
+- The `import_project` MCP tool and `/v1/import-project`.
 - Crash notifications, project import (`package.json`, Procfile, Docker Compose), HTTP health
   checks and the `unhealthy` state, restart after a crash, and export.
 
@@ -136,6 +137,37 @@ Choose **Import .claude\launch.json…** and pick a project's `.claude\launch.js
 configuration (`{name, runtimeExecutable, runtimeArgs, port, url}`) becomes a server that
 runs from the project folder. Configurations that are already in ServerHat are skipped. The
 API also accepts the project folder itself.
+
+## Use it from Claude Code and Codex (MCP)
+
+ServerHat has a built-in MCP server, so AI coding agents get it as tools instead of
+having to call the API. Click the globe, then the gear, and choose **Copy for Claude Code**
+(or **Copy for Codex**); they're also in the right-click menu. Paste the command into
+PowerShell or Command Prompt and press Enter. It looks like this, with the path ServerHat
+is installed in:
+
+```powershell
+claude mcp add --scope user serverhat -- "C:\Users\you\AppData\Local\Programs\GuruHat\ServerHat\ServerHat.exe" --mcp
+codex mcp add serverhat -- "C:\Users\you\AppData\Local\Programs\GuruHat\ServerHat\ServerHat.exe" --mcp
+```
+
+These commands configure the **Claude Code CLI** and **Codex CLI**, which must already be
+installed (`Get-Command claude` or `Get-Command codex` finds them). With Node.js:
+
+```powershell
+npm install -g @anthropic-ai/claude-code
+npm install -g @openai/codex@latest
+```
+
+The agent then has `list_servers`, `get_server`, `start_server`, `stop_server`,
+`restart_server`, `get_logs`, `add_server`, `update_server`, `remove_server` and
+`import_launch_json`. Start and restart wait until the server is running or has failed,
+and a failure comes back with the server's last lines of output. A server an agent adds or
+changes waits for you to allow it first (see [Approval](#approval)).
+
+`ServerHat.exe --mcp` speaks MCP over its standard input and output and drives the running
+app through the API below. It opens ServerHat if it isn't running, and it reads the token
+from the token file itself, so the token never goes into an MCP config.
 
 ## API
 

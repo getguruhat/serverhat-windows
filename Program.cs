@@ -15,6 +15,8 @@ internal static class Program
         if (args.Length >= 2 && args[0] == "--test-listen") { SmokeTest.Listen(int.Parse(args[1])); return; }
         if (args.Length >= 1 && args[0] == "--test-child") { Thread.Sleep(Timeout.Infinite); return; }
         if (args.Length >= 1 && args[0] == "--print-args") { foreach (var arg in args.Skip(1)) Console.WriteLine("arg:" + arg); return; }
+        // Started by Claude Code, Codex or another MCP client; see McpServer.cs.
+        if (args.Length >= 1 && args[0] == "--mcp") { Environment.ExitCode = McpServer.Run(); return; }
 
         // DPI awareness is set in App.config and app.manifest.
         Application.EnableVisualStyles();
@@ -243,6 +245,9 @@ internal sealed class TrayApp : ApplicationContext
         menu.Items.Add(new ToolStripMenuItem("Import .claude\\launch.json…", null, (_, _) => ImportLaunchJson()));
         menu.Items.Add(new ToolStripMenuItem("Open servers.json", null, (_, _) => Program.OpenFile(Paths.ConfigFile)));
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(new ToolStripMenuItem("Copy for Claude Code", null, (_, _) => CopySetup(codex: false)));
+        menu.Items.Add(new ToolStripMenuItem("Copy for Codex", null, (_, _) => CopySetup(codex: true)));
+        menu.Items.Add(new ToolStripSeparator());
         var atLogin = new ToolStripMenuItem("Open ServerHat when I sign in") { Checked = Settings.OpenAtLogin };
         atLogin.Click += (_, _) =>
         {
@@ -371,6 +376,15 @@ internal sealed class TrayApp : ApplicationContext
         var answer = MessageBox.Show((state.Detail ?? "") + "\n\nServerHat didn't start it. Windows will end it right away, without saving anything it has open.",
             $"End the process using port {server.Port}?", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
         if (answer == DialogResult.OK) ServerManager.EndProcess(pid);
+    }
+
+    /// Copies the command that adds ServerHat's MCP server to Claude Code or Codex.
+    internal void CopySetup(bool codex)
+    {
+        try { Clipboard.SetText(McpServer.SetupCommand(codex)); }
+        catch (ExternalException) { return; }
+        tray.ShowBalloonTip(8000, codex ? "Copied for Codex" : "Copied for Claude Code",
+            $"Paste it into PowerShell or Command Prompt and press Enter. {(codex ? "Codex" : "Claude Code")} then has ServerHat's tools.", ToolTipIcon.Info);
     }
 
     internal void ImportLaunchJson()

@@ -320,6 +320,9 @@ internal sealed class TrayPanel : Form
             Item("Open the logs folder", () => { Directory.CreateDirectory(Paths.LogFolder); Program.OpenFile(Paths.LogFolder); }),
             atLogin,
             new ToolStripSeparator(),
+            Item("Copy for Claude Code", () => app.CopySetup(codex: false)),
+            Item("Copy for Codex", () => app.CopySetup(codex: true)),
+            new ToolStripSeparator(),
             Item("About ServerHat", AboutWindow.ShowShared),
         ];
     }

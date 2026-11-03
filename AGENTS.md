@@ -5,7 +5,12 @@ the user asks you to add, run, restart or debug a local server, use ServerHat in
 starting the server in your own shell, so it keeps running after your session and the user
 can control it from the notification area.
 
-The core API is the same as ServerHat for macOS, without MCP or `/v1/import-project`.
+If you have ServerHat's MCP tools (`list_servers`, `start_server`, `add_server`, …), use
+them and skip the PowerShell steps below; the same rules apply. To add them, the user
+chooses **Copy for Claude Code** or **Copy for Codex** in ServerHat's Settings (the gear)
+and runs the copied `claude mcp add … ServerHat.exe --mcp` command.
+
+The core API is the same as ServerHat for macOS, without `/v1/import-project`.
 The examples are for PowerShell; in Git Bash or WSL, the macOS AGENTS.md examples work
 with the token from `$APPDATA/ServerHat/api-token`.
 
