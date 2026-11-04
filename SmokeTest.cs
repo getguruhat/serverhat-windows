@@ -47,30 +47,30 @@ internal static class SmokeTest
     /// the Windows display language while the API stays English.
     private static void Translations()
     {
-        var english = Strings.For(new System.Globalization.CultureInfo("en-US"));
-        var texts = typeof(Strings).GetProperties().Where(p => p.PropertyType == typeof(string)).ToList();
+        var english = global::ServerHat.Strings.For(new System.Globalization.CultureInfo("en-US"));
+        var texts = typeof(global::ServerHat.Strings).GetProperties().Where(p => p.PropertyType == typeof(string)).ToList();
         static string Holes(string text) => string.Join(",", System.Text.RegularExpressions.Regex.Matches(text, @"\{\d\}").Cast<System.Text.RegularExpressions.Match>().Select(m => m.Value).OrderBy(v => v));
         foreach (var name in new[] { "es-ES", "de-DE", "fr-FR", "pt-BR", "ja-JP", "zh-CN", "ko-KR" })
         {
-            var strings = Strings.For(new System.Globalization.CultureInfo(name));
+            var strings = global::ServerHat.Strings.For(new System.Globalization.CultureInfo(name));
             var wrong = texts.Where(p => Holes((string)p.GetValue(strings)!) != Holes((string)p.GetValue(english)!)).Select(p => p.Name).ToList();
             Check(wrong.Count == 0, $"{name} placeholders match English{(wrong.Count > 0 ? ": " + string.Join(", ", wrong) : "")}");
             Check(strings.StartAll != english.StartAll && strings.ApprovalExplanation != english.ApprovalExplanation, $"{name} is translated");
             try { _ = texts.Select(p => string.Format((string)p.GetValue(strings)!, "a", "b", "c")).ToList(); Check(true, $"{name} formats"); }
             catch (FormatException e) { Fail($"{name} formats: {e.Message}"); }
         }
-        Check(Strings.For(new System.Globalization.CultureInfo("de-AT")).StartAll == "Alle starten", "regional German uses German");
-        Check(Strings.For(new System.Globalization.CultureInfo("zh-TW")).StartAll == english.StartAll, "Traditional Chinese falls back to English");
-        Check(Strings.For(new System.Globalization.CultureInfo("es-MX")).StartAll == "Iniciar todos", "Mexican Spanish uses Spanish");
+        Check(global::ServerHat.Strings.For(new System.Globalization.CultureInfo("de-AT")).StartAll == "Alle starten", "regional German uses German");
+        Check(global::ServerHat.Strings.For(new System.Globalization.CultureInfo("zh-TW")).StartAll == english.StartAll, "Traditional Chinese falls back to English");
+        Check(global::ServerHat.Strings.For(new System.Globalization.CultureInfo("es-MX")).StartAll == "Iniciar todos", "Mexican Spanish uses Spanish");
     }
 
     private static async Task Steps()
     {
         // The checks below read English text; the API's answers are English in every language.
         Translations();
-        Strings.Use(new System.Globalization.CultureInfo("ja-JP"));
+        global::ServerHat.Strings.Use(new System.Globalization.CultureInfo("ja-JP"));
         var japanese = new ServerState { Status = ServerStatus.PortInUse }.Shown();
-        Strings.Use(new System.Globalization.CultureInfo("en-US"));
+        global::ServerHat.Strings.Use(new System.Globalization.CultureInfo("en-US"));
         Check(japanese == "ポート使用中", "the panel's status follows the display language");
         var root = Path.Combine(Path.GetTempPath(), "ServerHat-smoke-" + Process.GetCurrentProcess().Id);
         Paths.ConfigFolder = Path.Combine(root, "config");
