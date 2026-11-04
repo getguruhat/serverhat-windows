@@ -10,7 +10,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>ServerHat</AssemblyName>
     <RootNamespace>ServerHat</RootNamespace>
-    <Version>0.3.0</Version>
+    <Version>0.3.1</Version>
     <Product>ServerHat</Product>
     <Company>GuruHat</Company>
     <ApplicationIcon>assets\ServerHat.ico</ApplicationIcon>
