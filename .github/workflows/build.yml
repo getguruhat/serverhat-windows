@@ -37,6 +37,73 @@ jobs:
           $app = Start-Process publish/ServerHat.exe -ArgumentList '--smoke-test' -PassThru -Wait
           Get-Content smoke-test.log
           if ($app.ExitCode -ne 0) { throw "Smoke test failed: $($app.ExitCode)" }
+      # The Microsoft Store version. It's uploaded unsigned: the Store signs it when it publishes.
+      - name: Build MSIX package
+        shell: pwsh
+        run: |
+          $sdk = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.*" | Sort-Object { [version]$_.Name } | Select-Object -Last 1
+          "$sdk\x64" | Out-File $env:GITHUB_PATH -Append
+          New-Item -ItemType Directory msix-layout, dist -Force | Out-Null
+          Copy-Item publish\* msix-layout -Recurse
+          Copy-Item msix\Assets msix-layout -Recurse
+          $manifest = [xml](Get-Content msix\AppxManifest.xml)
+          $manifest.Package.Identity.Version = "$env:VERSION.0"
+          $manifest.Save("$PWD\msix-layout\AppxManifest.xml")
+          & "$sdk\x64\makeappx.exe" pack /d msix-layout /p "dist\ServerHat-$env:VERSION-x64.msix" /o
+          if ($LASTEXITCODE -ne 0) { throw "makeappx failed" }
+      # Signs a copy with a throwaway certificate and installs it. Then checks what the Store
+      # version must get right: the ServerHat.exe alias answers MCP, and the app writes its
+      # API token to the real %APPDATA%, where scripts and agents read it.
+      - name: Test-install MSIX package
+        shell: pwsh
+        run: |
+          $msix = (Get-Item dist\*.msix).FullName
+          $identity = ([xml](Get-Content msix\AppxManifest.xml)).Package.Identity
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $identity.Publisher -CertStoreLocation Cert:\CurrentUser\My -TextExtension @("2.5.29.19={text}")
+          $password = ConvertTo-SecureString -String "test" -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath test.pfx -Password $password | Out-Null
+          Import-PfxCertificate -FilePath test.pfx -CertStoreLocation Cert:\LocalMachine\TrustedPeople -Password $password | Out-Null
+          Copy-Item $msix test.msix
+          signtool sign /fd SHA256 /f test.pfx /p test test.msix
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed" }
+          Add-AppxPackage test.msix
+          $package = Get-AppxPackage -Name $identity.Name
+          if (-not $package) { throw "MSIX did not install" }
+          "Installed $($package.PackageFullName)"
+
+          $alias = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\ServerHat.exe"
+          if (-not (Test-Path $alias)) { throw "The ServerHat.exe app execution alias is missing" }
+
+          $start = New-Object System.Diagnostics.ProcessStartInfo $alias, "--mcp"
+          $start.UseShellExecute = $false
+          $start.RedirectStandardInput = $true
+          $start.RedirectStandardOutput = $true
+          $mcp = [System.Diagnostics.Process]::Start($start)
+          $mcp.StandardInput.WriteLine('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}')
+          $mcp.StandardInput.Flush()
+          $read = $mcp.StandardOutput.ReadLineAsync()
+          if (-not $read.Wait(20000)) { throw "The alias's MCP server didn't answer initialize" }
+          "MCP: $($read.Result)"
+          if ($read.Result -notmatch '"serverhat"') { throw "Unexpected MCP answer" }
+          $mcp.StandardInput.Close()
+          if (-not $mcp.WaitForExit(10000)) { $mcp.Kill() }
+
+          $support = Join-Path $env:APPDATA "ServerHat"
+          Get-Process ServerHat -ErrorAction SilentlyContinue | Stop-Process -Force
+          Remove-Item $support -Recurse -Force -ErrorAction SilentlyContinue
+          Start-Process $alias
+          $token = Join-Path $support "api-token"
+          for ($i = 0; $i -lt 30 -and -not (Test-Path $token); $i++) { Start-Sleep 1 }
+          if (-not (Test-Path $token)) { throw "The packaged app didn't write $token (is file write virtualization still on?)" }
+          $auth = @{ Authorization = "Bearer " + (Get-Content $token).Trim() }
+          (Invoke-RestMethod http://127.0.0.1:47317/v1/servers -Headers $auth) | ConvertTo-Json -Depth 3
+          "The packaged app's API works with the token in the real %APPDATA%"
+          Get-Process ServerHat -ErrorAction SilentlyContinue | Stop-Process -Force
+          Remove-AppxPackage $package.PackageFullName
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ServerHat-Windows-msix
+          path: dist/*.msix
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
       - name: Build installer

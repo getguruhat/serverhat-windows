@@ -311,7 +311,7 @@ internal static class McpServer
     /// Copy for Claude Code and Copy for Codex items.
     public static string SetupCommand(bool codex)
     {
-        var exe = "\"" + Application.ExecutablePath + "\"";
+        var exe = "\"" + StorePackage.ExecutablePath + "\"";
         return codex ? $"codex mcp add serverhat -- {exe} --mcp" : $"claude mcp add --scope user serverhat -- {exe} --mcp";
     }
 }

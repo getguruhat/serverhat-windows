@@ -106,7 +106,8 @@ internal sealed class TrayApp : ApplicationContext
             updateTimer.Interval = 24 * 60 * 60 * 1000;
             await CheckForUpdateAsync();
         };
-        updateTimer.Start();
+        // The Microsoft Store updates its own version.
+        if (!StorePackage.Packaged) updateTimer.Start();
         Application.ApplicationExit += (_, _) => StopEverything();
     }
 

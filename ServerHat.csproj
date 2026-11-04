@@ -24,7 +24,15 @@
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Windows.Forms" />
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <!-- The MSIX startup task API (used by the Microsoft Store version). -->
+    <PackageReference Include="Microsoft.Windows.SDK.Contracts" Version="10.0.19041.1" />
     <!-- The app icon at full size, for the About window. -->
     <EmbeddedResource Include="assets\ServerHat.png" LogicalName="ServerHat.png" />
   </ItemGroup>
+  <!-- Windows supplies the WinRT metadata at run time; don't copy the .winmd files. -->
+  <Target Name="SkipWinmdCopy" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Extension)' == '.winmd'" />
+    </ItemGroup>
+  </Target>
 </Project>

@@ -34,16 +34,19 @@ internal static class Settings
         }
     }
 
-    /// "Open ServerHat at sign-in", as a Run entry for this user.
+    /// "Open ServerHat at sign-in", as a Run entry for this user, or the Store package's
+    /// startup task.
     public static bool OpenAtLogin
     {
         get
         {
+            if (StorePackage.Packaged) return StorePackage.StartupEnabled;
             using var key = Registry.CurrentUser.OpenSubKey(RunKey);
             return key?.GetValue(RunValue) is string;
         }
         set
         {
+            if (StorePackage.Packaged) { StorePackage.StartupEnabled = value; return; }
             using var key = Registry.CurrentUser.CreateSubKey(RunKey);
             if (value) key.SetValue(RunValue, '"' + Application.ExecutablePath + '"'); else key.DeleteValue(RunValue, false);
         }
