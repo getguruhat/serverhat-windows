@@ -19,6 +19,6 @@ ServerHat starts, stops, restarts and opens the local web servers you run while 
 - Finds `npm`, `node`, `python` and other commands on your PATH, including `.cmd` shims
 - The same `servers.json` and core local API as ServerHat for macOS, so the same scripts work on both
 
-**Not on Windows yet:** project import, crash notifications, project import, HTTP health checks, restart after a crash and export are macOS-only for now.
+**Not on Windows yet:** project import, crash notifications, HTTP health checks, restart after a crash and export are macOS-only for now.
 
 Free and open source (MIT). No account, no analytics.
