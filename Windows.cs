@@ -49,7 +49,7 @@ internal sealed class LogWindow : Form
         this.manager = manager;
         id = server.Id;
         log = manager.Log(server.Id);
-        Text = $"{server.Name} — Logs";
+        Text = Strings.F(Strings.Current.LogsTitle, server.Name);
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         Font = SystemFonts.MessageBoxFont;
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -57,9 +57,9 @@ internal sealed class LogWindow : Form
         StartPosition = FormStartPosition.CenterScreen;
         KeyPreview = true;
 
-        var clear = new Button { Text = "Clear", AutoSize = true, Anchor = AnchorStyles.Right };
+        var clear = new Button { Text = Strings.Current.Clear, AutoSize = true, Anchor = AnchorStyles.Right };
         clear.Click += (_, _) => log.Clear();
-        var openFile = new Button { Text = "Open log file", AutoSize = true, Anchor = AnchorStyles.Right };
+        var openFile = new Button { Text = Strings.Current.OpenLogFile, AutoSize = true, Anchor = AnchorStyles.Right };
         openFile.Click += (_, _) => Program.OpenFile(log.FilePath);
         var bar = new TableLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, ColumnCount = 3, Padding = new Padding(8, 6, 8, 6) };
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -79,7 +79,7 @@ internal sealed class LogWindow : Form
     private void UpdateText(bool first)
     {
         var state = manager.State(id);
-        status.Text = state.Detail ?? state.Status.Label();
+        status.Text = state.Shown();
         if (log.Revision == shown) return;
         shown = log.Revision;
         var info = new ScrollInfo { cbSize = Marshal.SizeOf<ScrollInfo>(), fMask = SIF_ALL };
@@ -116,8 +116,8 @@ internal sealed class EditWindow : Form
     private readonly ServerConfig? original;
     private readonly TextBox name = new(), cwd = new(), command = new(), args = new(), port = new(), url = new();
     private readonly TextBox env = new() { Multiline = true, AcceptsReturn = true, ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 9.5f), Height = 80 };
-    private readonly CheckBox startAtLogin = new() { Text = "Start this server when ServerHat starts", AutoSize = true };
-    private readonly CheckBox openAtLogin = new() { Text = "Open ServerHat when I sign in to Windows", AutoSize = true };
+    private readonly CheckBox startAtLogin = new() { Text = Strings.Current.StartWithServerHat, AutoSize = true };
+    private readonly CheckBox openAtLogin = new() { Text = Strings.Current.OpenAtWindowsSignIn, AutoSize = true };
     private readonly Label error = new() { AutoSize = true, ForeColor = Color.Firebrick, MaximumSize = new Size(470, 0) };
 
     public static void ShowFor(ServerManager manager, ServerConfig? editing)
@@ -133,7 +133,7 @@ internal sealed class EditWindow : Form
     {
         this.manager = manager;
         original = editing;
-        Text = editing is null ? "Add Server" : $"Edit {editing.Name}";
+        Text = editing is null ? Strings.Current.AddServerTitle : Strings.F(Strings.Current.EditTitle, editing.Name);
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         Font = SystemFonts.MessageBoxFont;
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -160,22 +160,22 @@ internal sealed class EditWindow : Form
             if (hint is not null && box is TextBox text) Cue(text, hint);
             row++;
         }
-        var choose = new Button { Text = "Choose…", AutoSize = true };
+        var choose = new Button { Text = Strings.Current.Choose, AutoSize = true };
         choose.Click += (_, _) => ChooseFolder();
-        Field("Name", name);
-        Field("Folder", cwd, null, choose);
-        Field("Command", command, "node, npm, python, or a path");
-        Field("Arguments", args, "server.mjs --port 4319");
-        Field("Port", port, "optional");
-        Field("URL", url, "optional, defaults to http://127.0.0.1:<port>");
-        Field("Environment", env);
-        grid.Controls.Add(new Label { Text = "One NAME=value per line. Arguments split on spaces; use quotes for spaces inside one.", AutoSize = true, ForeColor = SystemColors.GrayText, MaximumSize = new Size((int)(340 * scale), 0) }, 1, row++);
+        Field(Strings.Current.Name, name);
+        Field(Strings.Current.Folder, cwd, null, choose);
+        Field(Strings.Current.Command, command, Strings.Current.CommandHint);
+        Field(Strings.Current.Arguments, args, "server.mjs --port 4319");
+        Field(Strings.Current.Port, port, Strings.Current.Optional);
+        Field(Strings.Current.Url, url, Strings.Current.UrlHint);
+        Field(Strings.Current.Environment, env);
+        grid.Controls.Add(new Label { Text = Strings.Current.EnvironmentHelp, AutoSize = true, ForeColor = SystemColors.GrayText, MaximumSize = new Size((int)(340 * scale), 0) }, 1, row++);
         grid.Controls.Add(startAtLogin, 1, row++);
         grid.Controls.Add(openAtLogin, 1, row++);
         grid.Controls.Add(error, 1, row++);
 
-        var save = new Button { Text = editing is null ? "Add" : "Save", AutoSize = true, MinimumSize = new Size(80, 0) };
-        var cancel = new Button { Text = "Cancel", AutoSize = true, MinimumSize = new Size(80, 0), DialogResult = DialogResult.Cancel };
+        var save = new Button { Text = editing is null ? Strings.Current.Add : Strings.Current.Save, AutoSize = true, MinimumSize = new Size(80, 0) };
+        var cancel = new Button { Text = Strings.Current.Cancel, AutoSize = true, MinimumSize = new Size(80, 0), DialogResult = DialogResult.Cancel };
         save.Click += (_, _) => Save();
         cancel.Click += (_, _) => Close();
         var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 0) };
@@ -222,11 +222,11 @@ internal sealed class EditWindow : Form
         foreach (var line in env.Text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Where(l => l.Trim().Length > 0))
         {
             var eq = line.IndexOf('=');
-            if (eq < 0) { error.Text = $"Environment line \"{line}\" needs NAME=value."; return; }
+            if (eq < 0) { error.Text = Strings.F(Strings.Current.EnvironmentLineError, line); return; }
             environment[line.Substring(0, eq).Trim()] = line.Substring(eq + 1);
         }
         var portText = port.Text.Trim();
-        if (portText.Length > 0 && !int.TryParse(portText, out _)) { error.Text = "Port must be a number."; return; }
+        if (portText.Length > 0 && !int.TryParse(portText, out _)) { error.Text = Strings.Current.PortNotNumber; return; }
         var config = new ServerConfig
         {
             Id = original?.Id ?? "", Name = name.Text.Trim(), Cwd = cwd.Text, Command = command.Text.Trim(),
@@ -244,7 +244,7 @@ internal sealed class EditWindow : Form
 
     private void ChooseFolder()
     {
-        using var dialog = new FolderBrowserDialog { Description = "Choose the folder the command runs in", ShowNewFolderButton = false };
+        using var dialog = new FolderBrowserDialog { Description = Strings.Current.ChooseFolder, ShowNewFolderButton = false };
         var start = Paths.Expand(cwd.Text);
         if (Directory.Exists(start)) dialog.SelectedPath = start;
         if (dialog.ShowDialog(this) == DialogResult.OK) cwd.Text = Paths.Abbreviate(dialog.SelectedPath);
@@ -325,20 +325,20 @@ internal sealed class ApprovalWindow : Form
         AutoSize = true;
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
 
-        var details = $"Command: {ServerManager.CommandLine(server)}\nFolder: {server.Cwd}";
-        if (server.Env.Count > 0) details += "\nEnvironment: " + string.Join(", ", server.Env.Keys.OrderBy(k => k, StringComparer.Ordinal));
+        var details = Strings.F(Strings.Current.CommandLine, ServerManager.CommandLine(server)) + "\n" + Strings.F(Strings.Current.FolderLine, server.Cwd);
+        if (server.Env.Count > 0) details += "\n" + Strings.F(Strings.Current.EnvironmentLine, string.Join(", ", server.Env.Keys.OrderBy(k => k, StringComparer.Ordinal)));
         var grid = new TableLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 1, Padding = new Padding(16) };
-        grid.Controls.Add(new Label { Text = $"Allow {server.Name} to run?", AutoSize = true, Font = new Font(Font.FontFamily, Font.Size * 1.25f, FontStyle.Bold), UseMnemonic = false, Margin = new Padding(0, 0, 0, 10) });
+        grid.Controls.Add(new Label { Text = Strings.F(Strings.Current.AllowTitle, server.Name), AutoSize = true, Font = new Font(Font.FontFamily, Font.Size * 1.25f, FontStyle.Bold), UseMnemonic = false, Margin = new Padding(0, 0, 0, 10) });
         grid.Controls.Add(new Label { Text = details, AutoSize = true, MaximumSize = new Size(480, 0), Font = new Font("Consolas", 9.5f), UseMnemonic = false });
         grid.Controls.Add(new Label
         {
-            Text = "It was added or changed through ServerHat's API (for example by Claude Code or Codex) or in servers.json. It will run as you.",
+            Text = Strings.Current.ApprovalExplanation,
             AutoSize = true, MaximumSize = new Size(480, 0), UseMnemonic = false, Margin = new Padding(0, 10, 0, 0),
         });
 
-        var allow = new Button { Text = "Allow", AutoSize = true, MinimumSize = new Size(80, 0) };
-        var remove = new Button { Text = "Remove", AutoSize = true, MinimumSize = new Size(80, 0) };
-        var later = new Button { Text = "Later", AutoSize = true, MinimumSize = new Size(80, 0) };
+        var allow = new Button { Text = Strings.Current.Allow, AutoSize = true, MinimumSize = new Size(80, 0) };
+        var remove = new Button { Text = Strings.Current.Remove, AutoSize = true, MinimumSize = new Size(80, 0) };
+        var later = new Button { Text = Strings.Current.Later, AutoSize = true, MinimumSize = new Size(80, 0) };
         var shown = ServerManager.Fingerprint(server);
         allow.Click += (_, _) =>
         {

@@ -30,8 +30,19 @@
   <Dependencies>
     <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
   </Dependencies>
+  <!-- The languages the app's text is translated into (Strings.cs). The Store lists these
+       as the app's languages, and only accepts listings in them. es-mx uses the same
+       Spanish as es-es. -->
   <Resources>
     <Resource Language="en-us" />
+    <Resource Language="es-es" />
+    <Resource Language="es-mx" />
+    <Resource Language="de-de" />
+    <Resource Language="fr-fr" />
+    <Resource Language="pt-br" />
+    <Resource Language="ja-jp" />
+    <Resource Language="zh-cn" />
+    <Resource Language="ko-kr" />
   </Resources>
   <Applications>
     <Application Id="ServerHat" Executable="ServerHat.exe" EntryPoint="Windows.FullTrustApplication">

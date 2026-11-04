@@ -76,7 +76,7 @@ internal sealed class AboutWindow : Form
         AutoScaleMode = AutoScaleMode.None;
         DoubleBuffered = true;
         KeyPreview = true;
-        Text = "About ServerHat";
+        Text = Strings.Current.AboutServerHat;
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         Relayout();
     }
@@ -150,16 +150,16 @@ internal sealed class AboutWindow : Form
             y += size + S(14);
         }
         y += Centre(g, "ServerHat", name!, theme.Text, y) + S(10);
-        y += Centre(g, $"Version {ApiServer.Version}", body!, theme.Secondary, y) + S(14);
-        y += Centre(g, "Your local web servers, one click away.", strong!, theme.Text, y) + S(8);
-        y += Centre(g, "Free and open source (MIT). No account, no analytics.", small!, theme.Secondary, y) + S(20);
+        y += Centre(g, Strings.F(Strings.Current.Version, ApiServer.Version), body!, theme.Secondary, y) + S(14);
+        y += Centre(g, Strings.Current.Tagline, strong!, theme.Text, y) + S(8);
+        y += Centre(g, Strings.Current.FreeAndOpen, small!, theme.Secondary, y) + S(20);
 
         using (var pen = new Pen(theme.Line, Math.Max(1, scale))) g.DrawLine(pen, pad, y, width - pad, y);
         y += S(20);
 
         // "♥ Support GuruHat" as a link in the accent blue, underlined while hovered.
         const string heart = "♥";
-        const string label = "Support GuruHat";
+        var label = Strings.Current.Support;
         var heartSize = TextRenderer.MeasureText(heart, glyph, Size.Empty, TextFormatFlags.NoPadding);
         var labelSize = TextRenderer.MeasureText(label, body, Size.Empty, TextFormatFlags.NoPadding);
         var gap = S(10);
@@ -171,7 +171,7 @@ internal sealed class AboutWindow : Form
         TextRenderer.DrawText(g, label, body, labelAt, theme.Accent, TextFormatFlags.NoPadding);
         if (hovering == support) Underline(g, labelAt, labelSize);
         y = support.Bottom + S(10);
-        y += Centre(g, "Donations keep GuruHat apps free. Thank you!", small!, theme.Secondary, y) + S(16);
+        y += Centre(g, Strings.Current.Donations, small!, theme.Secondary, y) + S(16);
 
         var siteSize = TextRenderer.MeasureText("guruhat.com", small, Size.Empty, TextFormatFlags.NoPadding);
         site = new Rectangle((width - siteSize.Width) / 2, y, siteSize.Width, siteSize.Height);

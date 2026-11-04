@@ -28,7 +28,7 @@ internal static class Program
         using var mutex = new Mutex(true, "GuruHat.ServerHat.Windows", out var first);
         if (!first)
         {
-            MessageBox.Show("ServerHat is already running. Look for the globe in the notification area, next to the clock (it may be behind the ^ arrow).",
+            MessageBox.Show(Strings.Current.AlreadyRunning,
                 "ServerHat", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
@@ -99,7 +99,7 @@ internal sealed class TrayApp : ApplicationContext
         Build();
         Refresh();
         if (firstRun && manager.PendingApprovals.Count == 0)
-            tray.ShowBalloonTip(8000, "ServerHat is running", "Click the globe here to add a server or import a .claude\\launch.json.", ToolTipIcon.Info);
+            tray.ShowBalloonTip(8000, Strings.Current.WelcomeTitle, Strings.Current.WelcomeMessage, ToolTipIcon.Info);
 
         updateTimer.Tick += async (_, _) =>
         {
@@ -122,9 +122,9 @@ internal sealed class TrayApp : ApplicationContext
         var crashed = states.Any(s => s.Status is ServerStatus.Crashed or ServerStatus.Failed);
         var pending = manager.PendingApprovals.Count > 0;
         tray.Icon = TrayIcon(crashed ? "crashed" : pending ? "pending" : running > 0 ? "running" : "idle");
-        var text = running == 0 ? "ServerHat" : $"ServerHat — {running} running";
-        if (crashed) text += ", needs attention";
-        else if (pending) text += ", waiting for your approval";
+        var text = running == 0 ? "ServerHat" : Strings.F(Strings.Current.TipRunning, running);
+        if (crashed) text += Strings.Current.TipNeedsAttention;
+        else if (pending) text += Strings.Current.TipWaiting;
         tray.Text = text.Length > 63 ? text.Substring(0, 63) : text;
         if (menu.Visible) UpdateServerItems();
     }
@@ -219,15 +219,15 @@ internal sealed class TrayApp : ApplicationContext
         foreach (var problem in new[] { manager.ConfigError, api.Problem }.OfType<string>())
             menu.Items.Add(new ToolStripMenuItem("⚠ " + Escape(Short(problem))) { Enabled = false, ToolTipText = problem });
 
-        var startAll = new ToolStripMenuItem("Start all", null, (_, _) => manager.StartAll()) { Enabled = manager.Servers.Count > 0 };
-        var stopAll = new ToolStripMenuItem("Stop all", null, (_, _) => manager.StopAll()) { Enabled = manager.RunningCount > 0 };
+        var startAll = new ToolStripMenuItem(Strings.Current.StartAll, null, (_, _) => manager.StartAll()) { Enabled = manager.Servers.Count > 0 };
+        var stopAll = new ToolStripMenuItem(Strings.Current.StopAll, null, (_, _) => manager.StopAll()) { Enabled = manager.RunningCount > 0 };
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(startAll);
         menu.Items.Add(stopAll);
         menu.Items.Add(new ToolStripSeparator());
 
         if (manager.Servers.Count == 0)
-            menu.Items.Add(new ToolStripMenuItem("No servers yet. Add one, import a .claude\\launch.json,\nor ask Claude Code or Codex to set one up (see the README).") { Enabled = false });
+            menu.Items.Add(new ToolStripMenuItem(Strings.Current.NoServersMenu) { Enabled = false });
         layout = Layout();
         foreach (var server in manager.Servers)
         {
@@ -242,14 +242,14 @@ internal sealed class TrayApp : ApplicationContext
         UpdateServerItems();
 
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(new ToolStripMenuItem("Add server…", null, (_, _) => EditWindow.ShowFor(manager, null)));
-        menu.Items.Add(new ToolStripMenuItem("Import .claude\\launch.json…", null, (_, _) => ImportLaunchJson()));
-        menu.Items.Add(new ToolStripMenuItem("Open servers.json", null, (_, _) => Program.OpenFile(Paths.ConfigFile)));
+        menu.Items.Add(new ToolStripMenuItem(Strings.Current.AddServerMenu, null, (_, _) => EditWindow.ShowFor(manager, null)));
+        menu.Items.Add(new ToolStripMenuItem(Strings.Current.ImportLaunchMenu, null, (_, _) => ImportLaunchJson()));
+        menu.Items.Add(new ToolStripMenuItem(Strings.Current.OpenServersJson, null, (_, _) => Program.OpenFile(Paths.ConfigFile)));
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(new ToolStripMenuItem("Copy for Claude Code", null, (_, _) => CopySetup(codex: false)));
-        menu.Items.Add(new ToolStripMenuItem("Copy for Codex", null, (_, _) => CopySetup(codex: true)));
+        menu.Items.Add(new ToolStripMenuItem(Strings.Current.CopyForClaude, null, (_, _) => CopySetup(codex: false)));
+        menu.Items.Add(new ToolStripMenuItem(Strings.Current.CopyForCodex, null, (_, _) => CopySetup(codex: true)));
         menu.Items.Add(new ToolStripSeparator());
-        var atLogin = new ToolStripMenuItem("Open ServerHat when I sign in") { Checked = Settings.OpenAtLogin };
+        var atLogin = new ToolStripMenuItem(Strings.Current.OpenAtSignIn) { Checked = Settings.OpenAtLogin };
         atLogin.Click += (_, _) =>
         {
             try { Settings.OpenAtLogin = !Settings.OpenAtLogin; }
@@ -257,16 +257,16 @@ internal sealed class TrayApp : ApplicationContext
         };
         menu.Items.Add(atLogin);
         if (update is { } available)
-            menu.Items.Add(new ToolStripMenuItem($"ServerHat {available.Version} is available ›", null, (_, _) => AboutWindow.Open(available.Page)));
-        menu.Items.Add(new ToolStripMenuItem("About ServerHat", null, (_, _) => AboutWindow.ShowShared()));
-        menu.Items.Add(new ToolStripMenuItem("Quit ServerHat (stops its servers)", null, (_, _) => Quit()));
+            menu.Items.Add(new ToolStripMenuItem(Strings.F(Strings.Current.UpdateMenu, available.Version), null, (_, _) => AboutWindow.Open(available.Page)));
+        menu.Items.Add(new ToolStripMenuItem(Strings.Current.AboutServerHat, null, (_, _) => AboutWindow.ShowShared()));
+        menu.Items.Add(new ToolStripMenuItem(Strings.Current.QuitServerHat, null, (_, _) => Quit()));
         menu.ResumeLayout();
     }
 
     private string HeaderText()
     {
         var running = manager.States.Count(s => s.Status is ServerStatus.Running or ServerStatus.Starting);
-        return manager.Servers.Count == 0 ? "ServerHat" : $"ServerHat — {running} of {manager.Servers.Count} running";
+        return manager.Servers.Count == 0 ? "ServerHat" : Strings.F(Strings.Current.MenuTitle, running, manager.Servers.Count);
     }
 
     private string Layout() => string.Join("\n", manager.Servers.Select(s => s.Id + (manager.NeedsApproval(s.Id) ? " " + ServerManager.Fingerprint(s) : "")));
@@ -283,13 +283,13 @@ internal sealed class TrayApp : ApplicationContext
             if (strong && bold is not null) line.Font = bold;
             menu.Items.Add(line);
         }
-        Line(active ? "Changed. Allow the new settings to restart it." : "New. Allow it to run this command?", true);
+        Line(active ? Strings.Current.ChangedAllow : Strings.Current.NewAllow, true);
         foreach (var part in Wrap(ServerManager.CommandLine(server))) Line(part);
         foreach (var part in Wrap("in " + server.Cwd)) Line(part);
         if (server.Env.Count > 0)
-            foreach (var part in Wrap("with " + string.Join(", ", server.Env.Keys.OrderBy(k => k, StringComparer.Ordinal)))) Line(part);
-        menu.Items.Add(new ToolStripMenuItem("Allow", null, (_, _) => Allow(id)) { Padding = new Padding(16, 0, 0, 0) });
-        menu.Items.Add(new ToolStripMenuItem("Remove…", null, (_, _) => { if (manager.Server(id) is { } current) ConfirmRemove(current); }) { Padding = new Padding(16, 0, 0, 0) });
+            foreach (var part in Wrap(Strings.F(Strings.Current.WithEnvironment, string.Join(", ", server.Env.Keys.OrderBy(k => k, StringComparer.Ordinal))))) Line(part);
+        menu.Items.Add(new ToolStripMenuItem(Strings.Current.Allow, null, (_, _) => Allow(id)) { Padding = new Padding(16, 0, 0, 0) });
+        menu.Items.Add(new ToolStripMenuItem(Strings.Current.RemoveMenu, null, (_, _) => { if (manager.Server(id) is { } current) ConfirmRemove(current); }) { Padding = new Padding(16, 0, 0, 0) });
         menu.Items.Add(new ToolStripSeparator());
     }
 
@@ -305,9 +305,9 @@ internal sealed class TrayApp : ApplicationContext
     internal void AskForApproval(ServerConfig server)
     {
         if (Quiet) return;
-        var body = $"{ServerManager.CommandLine(server)}\nin {server.Cwd}. Click to review and allow.";
+        var body = Strings.F(Strings.Current.ReviewMessage, ServerManager.CommandLine(server), server.Cwd);
         balloonServer = server.Id;
-        tray.ShowBalloonTip(15000, Short($"Review command for {server.Name}", 63), Short(body, 255), ToolTipIcon.Warning);
+        tray.ShowBalloonTip(15000, Short(Strings.F(Strings.Current.ReviewTitle, server.Name), 63), Short(body, 255), ToolTipIcon.Warning);
     }
 
     /// Updates names and statuses in place, so an open menu follows along without closing.
@@ -325,9 +325,9 @@ internal sealed class TrayApp : ApplicationContext
             var state = manager.State(server.Id);
             var port = server.Port is { } p ? $"  :{p}" : "";
             var pending = manager.NeedsApproval(server.Id);
-            item.Text = $"{Escape(server.Name)}{port}  —  {(pending ? "waiting for your approval" : state.Status.Label())}";
+            item.Text = $"{Escape(server.Name)}{port}  —  {(pending ? Strings.Current.WaitingForApproval : state.Status.Label())}";
             item.Image = Dot(pending ? Pending : StatusColor(state.Status));
-            item.ToolTipText = state.Detail ?? "";
+            item.ToolTipText = state.ShownDetail ?? state.Detail ?? "";
         }
     }
 
@@ -338,25 +338,25 @@ internal sealed class TrayApp : ApplicationContext
         if (manager.Server(id) is not { } server) return;
         var state = manager.State(id);
         var items = item.DropDownItems;
-        items.Add(new ToolStripMenuItem(Escape(Short(state.Detail ?? state.Status.Label()))) { Enabled = false, ToolTipText = state.Detail });
+        items.Add(new ToolStripMenuItem(Escape(Short(state.Shown()))) { Enabled = false, ToolTipText = state.ShownDetail ?? state.Detail });
         items.Add(new ToolStripSeparator());
         if (state.Status is ServerStatus.Running or ServerStatus.Starting or ServerStatus.Stopping)
-            items.Add(new ToolStripMenuItem("Stop", null, (_, _) => manager.Stop(id)) { Enabled = state.Status != ServerStatus.Stopping });
+            items.Add(new ToolStripMenuItem(Strings.Current.Stop, null, (_, _) => manager.Stop(id)) { Enabled = state.Status != ServerStatus.Stopping });
         else
-            items.Add(new ToolStripMenuItem("Start", null, (_, _) => Try(() => manager.Start(id))) { Enabled = state.Status != ServerStatus.PortInUse });
-        items.Add(new ToolStripMenuItem("Restart", null, (_, _) => Try(() => manager.Restart(id))));
-        items.Add(new ToolStripMenuItem("Open in browser", null, (_, _) => { if (server.OpenUrl is { } url) AboutWindow.Open(url); }) { Enabled = server.OpenUrl is not null });
+            items.Add(new ToolStripMenuItem(Strings.Current.Start, null, (_, _) => Try(() => manager.Start(id))) { Enabled = state.Status != ServerStatus.PortInUse });
+        items.Add(new ToolStripMenuItem(Strings.Current.Restart, null, (_, _) => Try(() => manager.Restart(id))));
+        items.Add(new ToolStripMenuItem(Strings.Current.OpenInBrowser, null, (_, _) => { if (server.OpenUrl is { } url) AboutWindow.Open(url); }) { Enabled = server.OpenUrl is not null });
         items.Add(new ToolStripSeparator());
-        items.Add(new ToolStripMenuItem("View logs", null, (_, _) => LogWindow.ShowFor(manager, server)));
-        items.Add(new ToolStripMenuItem("Edit…", null, (_, _) => EditWindow.ShowFor(manager, server)));
-        items.Add(new ToolStripMenuItem("Open folder in File Explorer", null, (_, _) => Program.OpenFile(server.WorkingDirectory)) { Enabled = Directory.Exists(server.WorkingDirectory) });
+        items.Add(new ToolStripMenuItem(Strings.Current.ViewLogs, null, (_, _) => LogWindow.ShowFor(manager, server)));
+        items.Add(new ToolStripMenuItem(Strings.Current.EditMenu, null, (_, _) => EditWindow.ShowFor(manager, server)));
+        items.Add(new ToolStripMenuItem(Strings.Current.OpenFolder, null, (_, _) => Program.OpenFile(server.WorkingDirectory)) { Enabled = Directory.Exists(server.WorkingDirectory) });
         if (state.Status == ServerStatus.PortInUse && state.Pid is { } pid)
         {
             items.Add(new ToolStripSeparator());
-            items.Add(new ToolStripMenuItem($"End the process using port {server.Port}…", null, (_, _) => ConfirmEnd(server, state, pid)));
+            items.Add(new ToolStripMenuItem(Strings.F(Strings.Current.EndProcessMenu, server.Port), null, (_, _) => ConfirmEnd(server, state, pid)));
         }
         items.Add(new ToolStripSeparator());
-        items.Add(new ToolStripMenuItem("Remove…", null, (_, _) => ConfirmRemove(server)));
+        items.Add(new ToolStripMenuItem(Strings.Current.RemoveMenu, null, (_, _) => ConfirmRemove(server)));
     }
 
     /// Start and Restart failures already show in the server's status, as on macOS.
@@ -367,15 +367,15 @@ internal sealed class TrayApp : ApplicationContext
 
     internal void ConfirmRemove(ServerConfig server)
     {
-        var answer = MessageBox.Show($"ServerHat stops it if it's running and forgets its settings. Its folder isn't touched.",
-            $"Remove {server.Name}?", MessageBoxButtons.OKCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+        var answer = MessageBox.Show(Strings.Current.RemoveMessage,
+            Strings.F(Strings.Current.RemoveTitle, server.Name), MessageBoxButtons.OKCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
         if (answer == DialogResult.OK) Try(() => manager.Remove(server.Id));
     }
 
     internal void ConfirmEnd(ServerConfig server, ServerState state, int pid)
     {
-        var answer = MessageBox.Show((state.Detail ?? "") + "\n\nServerHat didn't start it. Windows will end it right away, without saving anything it has open.",
-            $"End the process using port {server.Port}?", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+        var answer = MessageBox.Show((state.ShownDetail ?? state.Detail ?? "") + "\n\n" + Strings.Current.EndMessage,
+            Strings.F(Strings.Current.EndTitle, server.Port), MessageBoxButtons.OKCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
         if (answer == DialogResult.OK) ServerManager.EndProcess(pid);
     }
 
@@ -384,16 +384,16 @@ internal sealed class TrayApp : ApplicationContext
     {
         try { Clipboard.SetText(McpServer.SetupCommand(codex)); }
         catch (ExternalException) { return; }
-        tray.ShowBalloonTip(8000, codex ? "Copied for Codex" : "Copied for Claude Code",
-            $"Paste it into PowerShell or Command Prompt and press Enter. {(codex ? "Codex" : "Claude Code")} then has ServerHat's tools.", ToolTipIcon.Info);
+        tray.ShowBalloonTip(8000, codex ? Strings.Current.CopiedForCodex : Strings.Current.CopiedForClaude,
+            Strings.F(Strings.Current.CopiedMessage, codex ? "Codex" : "Claude Code"), ToolTipIcon.Info);
     }
 
     internal void ImportLaunchJson()
     {
         using var dialog = new OpenFileDialog
         {
-            Title = "Import servers from .claude\\launch.json",
-            Filter = "launch.json|launch.json|JSON files (*.json)|*.json",
+            Title = Strings.Current.ImportDialogTitle,
+            Filter = "launch.json|launch.json|" + Strings.Current.JsonFiles + " (*.json)|*.json",
             CheckFileExists = true,
         };
         if (dialog.ShowDialog() != DialogResult.OK) return;
@@ -402,13 +402,13 @@ internal sealed class TrayApp : ApplicationContext
             // Importing from the menu is the user's own choice, so it counts as allowed.
             var added = manager.ImportLaunchJson(dialog.FileName, approvedByUser: true);
             if (added.Count == 0)
-                MessageBox.Show("Every configuration in that launch.json is already in ServerHat.", "Nothing new to import", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(Strings.Current.NothingToImport, Strings.Current.NothingToImportTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
             else
-                MessageBox.Show(string.Join(", ", added.Select(s => s.Name)), $"Imported {added.Count} server{(added.Count == 1 ? "" : "s")}", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(string.Join(", ", added.Select(s => s.Name)), added.Count == 1 ? Strings.Current.ImportedOne : Strings.F(Strings.Current.ImportedMany, added.Count), MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (ManagerError e)
         {
-            MessageBox.Show(e.Message, "Couldn't import", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(e.Message, Strings.Current.CouldntImport, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
@@ -421,8 +421,8 @@ internal sealed class TrayApp : ApplicationContext
         update = release;
         if (Settings.AnnouncedUpdate == release.Version.ToString()) return;
         Settings.AnnouncedUpdate = release.Version.ToString();
-        var answer = MessageBox.Show($"You have version {UpdateCheck.Current}. Download the new version from GitHub?",
-            $"ServerHat {release.Version} is available", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+        var answer = MessageBox.Show(Strings.F(Strings.Current.UpdateMessage, UpdateCheck.Current),
+            Strings.F(Strings.Current.UpdateTitle, release.Version), MessageBoxButtons.YesNo, MessageBoxIcon.Information);
         if (answer == DialogResult.Yes) AboutWindow.Open(release.Page);
     }
 

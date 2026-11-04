@@ -40,7 +40,7 @@ internal static class StorePackage
             var state = Task.Run(async () => await task.RequestEnableAsync()).GetAwaiter().GetResult();
             // Once the user turns ServerHat off in Windows' own startup settings, only they can turn it back on.
             if (state == StartupTaskState.DisabledByUser)
-                MessageBox.Show("You turned ServerHat off in Windows' startup apps. To open it at sign-in, turn it back on in Settings › Apps › Startup.",
+                MessageBox.Show(Strings.Current.StartupBlocked,
                     "ServerHat", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
     }

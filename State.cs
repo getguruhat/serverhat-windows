@@ -13,16 +13,20 @@ internal static class ServerStatusNames
         _ => status.ToString().ToLowerInvariant(),
     };
 
+    /// The status in the Windows display language, for the menu and panel.
     public static string Label(this ServerStatus status) => status switch
     {
-        ServerStatus.Stopped => "Stopped",
-        ServerStatus.Starting => "Starting…",
-        ServerStatus.Running => "Running",
-        ServerStatus.Stopping => "Stopping…",
-        ServerStatus.Crashed => "Crashed",
-        ServerStatus.PortInUse => "Port in use",
-        _ => "Couldn't start",
+        ServerStatus.Stopped => Strings.Current.Stopped,
+        ServerStatus.Starting => Strings.Current.Starting,
+        ServerStatus.Running => Strings.Current.Running,
+        ServerStatus.Stopping => Strings.Current.Stopping,
+        ServerStatus.Crashed => Strings.Current.Crashed,
+        ServerStatus.PortInUse => Strings.Current.PortInUse,
+        _ => Strings.Current.CouldntStart,
     };
+
+    /// What the menu, panel and log window show: the translated detail, or the status.
+    public static string Shown(this ServerState state) => state.ShownDetail ?? state.Detail ?? state.Status.Label();
 }
 
 internal sealed record ServerState
@@ -30,6 +34,8 @@ internal sealed record ServerState
     public ServerStatus Status { get; init; } = ServerStatus.Stopped;
     /// A sentence for people: why it crashed, who holds the port, and so on.
     public string? Detail { get; init; }
+    /// The same sentence in the Windows display language. Detail stays English for the API.
+    public string? ShownDetail { get; init; }
     public int? Pid { get; init; }
     public DateTime? StartedAt { get; init; }
     public int? ExitCode { get; init; }

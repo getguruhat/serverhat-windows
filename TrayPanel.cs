@@ -281,8 +281,8 @@ internal sealed class TrayPanel : Form
             var active = manager.States.Count(s => s.Status is ServerStatus.Running or ServerStatus.Starting);
             string? right = null;
             var rightColor = colors.Secondary;
-            if (active > 0) { right = $"{active} active"; rightColor = colors.Green; }
-            else if (manager.Servers.Count > 0) right = "All stopped";
+            if (active > 0) { right = Strings.F(Strings.Current.Active, active); rightColor = colors.Green; }
+            else if (manager.Servers.Count > 0) right = Strings.Current.AllStopped;
             var rightWidth = right is null ? 0 : Measure(right, active > 0 ? f.SmallBold : f.Small).Width;
             var rx = capsule.Right - S(12) - rightWidth;
             Label(g, "ServerHat", f.Bold, colors.Text, new Rectangle(tx, y, rx - tx - S(8), h), TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
@@ -300,30 +300,30 @@ internal sealed class TrayPanel : Form
         var add = new Rectangle(bx, y, button, button);
         var settings = new Rectangle(bx + button + gap, y, button, button);
         var quit = new Rectangle(bx + 2 * (button + gap), y, button, button);
-        CircleButton(g, add, Glyphs.Add, colors.Text, colors.Card, true, "Add or import servers",
-            () => DropMenu(add, Item("Add server…", () => EditWindow.ShowFor(manager, null)), Item("Import .claude\\launch.json…", app.ImportLaunchJson)));
-        CircleButton(g, settings, Glyphs.Settings, colors.Text, colors.Card, true, "Settings and About", () => DropMenu(settings, SettingsItems()));
-        CircleButton(g, quit, Glyphs.Power, colors.Text, colors.Card, true, "Quit ServerHat (stops its servers)", ConfirmQuit);
+        CircleButton(g, add, Glyphs.Add, colors.Text, colors.Card, true, Strings.Current.AddOrImport,
+            () => DropMenu(add, Item(Strings.Current.AddServerMenu, () => EditWindow.ShowFor(manager, null)), Item(Strings.Current.ImportLaunchMenu, app.ImportLaunchJson)));
+        CircleButton(g, settings, Glyphs.Settings, colors.Text, colors.Card, true, Strings.Current.SettingsAndAbout, () => DropMenu(settings, SettingsItems()));
+        CircleButton(g, quit, Glyphs.Power, colors.Text, colors.Card, true, Strings.Current.QuitServerHat, ConfirmQuit);
         return y + h;
     }
 
     private ToolStripItem[] SettingsItems()
     {
-        var atLogin = new ToolStripMenuItem("Open ServerHat when I sign in") { Checked = Settings.OpenAtLogin };
+        var atLogin = new ToolStripMenuItem(Strings.Current.OpenAtSignIn) { Checked = Settings.OpenAtLogin };
         atLogin.Click += (_, _) =>
         {
             try { Settings.OpenAtLogin = !Settings.OpenAtLogin; }
             catch (Exception e) when (e is UnauthorizedAccessException or System.Security.SecurityException or IOException) { MessageBox.Show(e.Message, "ServerHat"); }
         };
         return [
-            Item("Open servers.json", () => Program.OpenFile(Paths.ConfigFile)),
-            Item("Open the logs folder", () => { Directory.CreateDirectory(Paths.LogFolder); Program.OpenFile(Paths.LogFolder); }),
+            Item(Strings.Current.OpenServersJson, () => Program.OpenFile(Paths.ConfigFile)),
+            Item(Strings.Current.OpenLogsFolder, () => { Directory.CreateDirectory(Paths.LogFolder); Program.OpenFile(Paths.LogFolder); }),
             atLogin,
             new ToolStripSeparator(),
-            Item("Copy for Claude Code", () => app.CopySetup(codex: false)),
-            Item("Copy for Codex", () => app.CopySetup(codex: true)),
+            Item(Strings.Current.CopyForClaude, () => app.CopySetup(codex: false)),
+            Item(Strings.Current.CopyForCodex, () => app.CopySetup(codex: true)),
             new ToolStripSeparator(),
-            Item("About ServerHat", AboutWindow.ShowShared),
+            Item(Strings.Current.AboutServerHat, AboutWindow.ShowShared),
         ];
     }
 
@@ -334,7 +334,7 @@ internal sealed class TrayPanel : Form
         if (count > 0)
         {
             HideNow();
-            var answer = MessageBox.Show($"It stops the {(count == 1 ? "server" : $"{count} servers")} it's running.", "Quit ServerHat?",
+            var answer = MessageBox.Show(count == 1 ? Strings.Current.QuitOne : Strings.F(Strings.Current.QuitMany, count), Strings.Current.QuitTitle,
                 MessageBoxButtons.OKCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
             if (answer != DialogResult.OK) return;
         }
@@ -347,9 +347,9 @@ internal sealed class TrayPanel : Form
         var pad = S(12);
         var textX = x + pad + S(42) + S(12);
         var textWidth = x + width - pad - textX;
-        const string hint = "Add one, import a .claude\\launch.json, or ask Claude Code or Codex.";
+        var hint = Strings.Current.NoServersHint;
         var hintHeight = Measure(hint, f.Small, textWidth, wrap: true).Height;
-        var titleHeight = Measure("No servers yet", f.Title).Height;
+        var titleHeight = Measure(Strings.Current.NoServers, f.Title).Height;
         var top = Math.Max(S(42), titleHeight + S(2) + hintHeight);
         var height = pad + top + S(14) + S(38) + S(8) + S(38) + pad;
         var card = new Rectangle(x, y, width, height);
@@ -359,12 +359,12 @@ internal sealed class TrayPanel : Form
             using (var tint = new SolidBrush(Color.FromArgb(33, colors.Accent))) g.FillEllipse(tint, x + pad, y + pad + (top - S(42)) / 2, S(42), S(42));
             Glyph(g, Glyphs.Globe, new Rectangle(x + pad, y + pad + (top - S(42)) / 2, S(42), S(42)), colors.Accent, f.Glyph);
             var ty = y + pad + (top - titleHeight - S(2) - hintHeight) / 2;
-            Label(g, "No servers yet", f.Title, colors.Text, new Rectangle(textX, ty, textWidth, titleHeight), 0);
+            Label(g, Strings.Current.NoServers, f.Title, colors.Text, new Rectangle(textX, ty, textWidth, titleHeight), 0);
             Label(g, hint, f.Small, colors.Secondary, new Rectangle(textX, ty + titleHeight + S(2), textWidth, hintHeight), TextFormatFlags.WordBreak);
         }
         var by = y + pad + top + S(14);
-        PillButton(g, new Rectangle(x + pad, by, width - 2 * pad, S(38)), "Add a server", colors.Accent, Color.White, f.Bold, () => { HideNow(); EditWindow.ShowFor(manager, null); });
-        PillButton(g, new Rectangle(x + pad, by + S(46), width - 2 * pad, S(38)), "Import .claude\\launch.json", colors.Control, colors.Text, f.Bold, () => { HideNow(); app.ImportLaunchJson(); });
+        PillButton(g, new Rectangle(x + pad, by, width - 2 * pad, S(38)), Strings.Current.AddAServer, colors.Accent, Color.White, f.Bold, () => { HideNow(); EditWindow.ShowFor(manager, null); });
+        PillButton(g, new Rectangle(x + pad, by + S(46), width - 2 * pad, S(38)), Strings.Current.ImportLaunch, colors.Control, colors.Text, f.Bold, () => { HideNow(); app.ImportLaunchJson(); });
         return y + height;
     }
 
@@ -391,7 +391,7 @@ internal sealed class TrayPanel : Form
         {
             Card(g, card, hot);
             Glyph(g, Glyphs.Download, new Rectangle(x + S(12), y, S(20), height), colors.Accent, F.Glyph);
-            Label(g, $"ServerHat {update.Version} is available", F.Medium, colors.Text, new Rectangle(x + S(40), y, width - S(70), height), TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            Label(g, Strings.F(Strings.Current.UpdateTitle, update.Version), F.Medium, colors.Text, new Rectangle(x + S(40), y, width - S(70), height), TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             Glyph(g, Glyphs.Chevron, new Rectangle(x + width - S(28), y, S(16), height), colors.Secondary, F.GlyphTiny);
         }
         hits.Add(new Hit(card, () => { HideNow(); AboutWindow.Open(update.Page); }, null, false));
@@ -414,20 +414,20 @@ internal sealed class TrayPanel : Form
             var h = S(26);
             var active = servers.Count(s => manager.State(s.Id).Status is ServerStatus.Running or ServerStatus.Starting);
             if (gg is not null)
-                Label(gg, $"{servers.Count} servers", f.Medium, colors.Secondary, new Rectangle(cx, cy, inner / 2, h), TextFormatFlags.VerticalCenter);
+                Label(gg, Strings.F(Strings.Current.ServerCount, servers.Count), f.Medium, colors.Secondary, new Rectangle(cx, cy, inner / 2, h), TextFormatFlags.VerticalCenter);
             var right = cx + inner;
             if (manager.RunningCount > 0)
             {
-                var w = Measure("Stop all", f.SmallBold).Width + S(22);
+                var w = Measure(Strings.Current.StopAll, f.SmallBold).Width + S(22);
                 right -= w;
-                TintButton(gg, new Rectangle(right, cy + (h - S(26)) / 2, w, S(26)), "Stop all", colors.Red, () => manager.StopAll(), list: false);
+                TintButton(gg, new Rectangle(right, cy + (h - S(26)) / 2, w, S(26)), Strings.Current.StopAll, colors.Red, () => manager.StopAll(), list: false);
                 right -= S(6);
             }
             if (active < servers.Count)
             {
-                var w = Measure("Start all", f.SmallBold).Width + S(22);
+                var w = Measure(Strings.Current.StartAll, f.SmallBold).Width + S(22);
                 right -= w;
-                TintButton(gg, new Rectangle(right, cy + (h - S(26)) / 2, w, S(26)), "Start all", colors.Accent, () => manager.StartAll(), list: false);
+                TintButton(gg, new Rectangle(right, cy + (h - S(26)) / 2, w, S(26)), Strings.Current.StartAll, colors.Accent, () => manager.StartAll(), list: false);
             }
             return h;
         }
@@ -513,7 +513,7 @@ internal sealed class TrayPanel : Form
             var size = Measure(shown, detailFont);
             var linkRect = new Rectangle(detailRect.X, detailRect.Y, Math.Min(size.Width, textWidth), detailRect.Height);
             if (g is not null) Label(g, shown, detailFont, colors.Accent, linkRect, TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine, underline: Hot(linkRect));
-            if (register) hits.Add(new Hit(linkRect, () => AboutWindow.Open(link), "Open " + link, true));
+            if (register) hits.Add(new Hit(linkRect, () => AboutWindow.Open(link), Strings.F(Strings.Current.OpenLink, link), true));
         }
         else if (g is not null)
         {
@@ -525,19 +525,19 @@ internal sealed class TrayPanel : Form
         var by = y + (height - button) / 2;
         if (state.Status == ServerStatus.Running)
         {
-            CircleButton(g, new Rectangle(bx, by, button, button), Glyphs.Restart, colors.Text, colors.Control, true, "Restart",
+            CircleButton(g, new Rectangle(bx, by, button, button), Glyphs.Restart, colors.Text, colors.Control, true, Strings.Current.Restart,
                 () => Try(() => manager.Restart(id)), list: register);
             bx += button + gap;
         }
         if (active)
-            CircleButton(g, new Rectangle(bx, by, button, button), Glyphs.Stop, colors.Text, colors.Control, state.Status != ServerStatus.Stopping, "Stop",
+            CircleButton(g, new Rectangle(bx, by, button, button), Glyphs.Stop, colors.Text, colors.Control, state.Status != ServerStatus.Stopping, Strings.Current.Stop,
                 () => manager.Stop(id), list: register);
         else
-            CircleButton(g, new Rectangle(bx, by, button, button), Glyphs.Play, colors.Accent, colors.Control, state.Status != ServerStatus.PortInUse, "Start",
+            CircleButton(g, new Rectangle(bx, by, button, button), Glyphs.Play, colors.Accent, colors.Control, state.Status != ServerStatus.PortInUse, Strings.Current.Start,
                 () => Try(() => manager.Start(id)), list: register);
         bx += button + gap;
         var more = new Rectangle(bx, by, button, button);
-        CircleButton(g, more, Glyphs.More, colors.Text, colors.Control, true, "Server menu", () => DropMenu(more, ServerItems(server)), list: register);
+        CircleButton(g, more, Glyphs.More, colors.Text, colors.Control, true, Strings.Current.ServerMenu, () => DropMenu(more, ServerItems(server)), list: register);
         return height;
     }
 
@@ -546,17 +546,17 @@ internal sealed class TrayPanel : Form
         var id = server.Id;
         var state = manager.State(id);
         var items = new List<ToolStripItem>();
-        if (server.OpenUrl is { } url) items.Add(Item("Open in browser", () => AboutWindow.Open(url)));
-        items.Add(Item("View logs", () => LogWindow.ShowFor(manager, server)));
-        items.Add(Item("Edit…", () => EditWindow.ShowFor(manager, server)));
-        items.Add(Item("Open folder in File Explorer", () => Program.OpenFile(server.WorkingDirectory), Directory.Exists(server.WorkingDirectory)));
+        if (server.OpenUrl is { } url) items.Add(Item(Strings.Current.OpenInBrowser, () => AboutWindow.Open(url)));
+        items.Add(Item(Strings.Current.ViewLogs, () => LogWindow.ShowFor(manager, server)));
+        items.Add(Item(Strings.Current.EditMenu, () => EditWindow.ShowFor(manager, server)));
+        items.Add(Item(Strings.Current.OpenFolder, () => Program.OpenFile(server.WorkingDirectory), Directory.Exists(server.WorkingDirectory)));
         if (state.Status == ServerStatus.PortInUse && state.Pid is { } pid)
         {
             items.Add(new ToolStripSeparator());
-            items.Add(Item($"End the process using port {server.Port}…", () => app.ConfirmEnd(server, state, pid)));
+            items.Add(Item(Strings.F(Strings.Current.EndProcessMenu, server.Port), () => app.ConfirmEnd(server, state, pid)));
         }
         items.Add(new ToolStripSeparator());
-        items.Add(Item("Remove…", () => app.ConfirmRemove(server)));
+        items.Add(Item(Strings.Current.RemoveMenu, () => app.ConfirmRemove(server)));
         return [.. items];
     }
 
@@ -566,7 +566,7 @@ internal sealed class TrayPanel : Form
         var f = F;
         var id = server.Id;
         var active = manager.State(id).Status is ServerStatus.Running or ServerStatus.Starting or ServerStatus.Stopping;
-        var subtitle = active ? "Changed. Allow the new settings to restart it." : "New. Allow it to run this command?";
+        var subtitle = active ? Strings.Current.ChangedAllow : Strings.Current.NewAllow;
         var textX = x + S(32);
         var textWidth = width - S(32);
         var nameHeight = Measure(server.Name, f.Bold).Height;
@@ -596,26 +596,26 @@ internal sealed class TrayPanel : Form
             // Character breaks, so a long path or argument wraps instead of being cut.
             Label(g, command, f.Mono, colors.Text, new Rectangle(box.Left + boxPad, ty, boxInner, commandHeight), TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis);
             ty += commandHeight + S(3);
-            Label(g, "in " + server.Cwd, f.Small, colors.Secondary, new Rectangle(box.Left + boxPad, ty, boxInner, smallHeight), TextFormatFlags.PathEllipsis | TextFormatFlags.SingleLine);
+            Label(g, Strings.F(Strings.Current.InFolder, server.Cwd), f.Small, colors.Secondary, new Rectangle(box.Left + boxPad, ty, boxInner, smallHeight), TextFormatFlags.PathEllipsis | TextFormatFlags.SingleLine);
             if (server.Env.Count > 0)
-                Label(g, "with " + envNames, f.Small, colors.Secondary, new Rectangle(box.Left + boxPad, ty + smallHeight + S(3), boxInner, smallHeight), TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
+                Label(g, Strings.F(Strings.Current.WithEnvironment, envNames), f.Small, colors.Secondary, new Rectangle(box.Left + boxPad, ty + smallHeight + S(3), boxInner, smallHeight), TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
         }
         var py = y + head + S(10) + boxHeight + S(10);
-        var allowWidth = Measure("Allow", f.SmallBold).Width + S(28);
-        var removeWidth = Measure("Remove", f.SmallBold).Width + S(28);
-        var editWidth = Measure("Edit…", f.SmallBold).Width + S(28);
+        var allowWidth = Measure(Strings.Current.Allow, f.SmallBold).Width + S(28);
+        var removeWidth = Measure(Strings.Current.Remove, f.SmallBold).Width + S(28);
+        var editWidth = Measure(Strings.Current.EditMenu, f.SmallBold).Width + S(28);
         var shown = ServerManager.Fingerprint(server);
-        TintButton(g, new Rectangle(x, py, allowWidth, pill), "Allow", colors.Accent, () =>
+        TintButton(g, new Rectangle(x, py, allowWidth, pill), Strings.Current.Allow, colors.Accent, () =>
         {
             // Only allow what the panel showed.
             if (manager.Server(id) is { } now && ServerManager.Fingerprint(now) == shown) ApprovalWindow.Allow(manager, id);
         }, list: register);
-        TintButton(g, new Rectangle(x + allowWidth + S(8), py, removeWidth, pill), "Remove", colors.Red, () =>
+        TintButton(g, new Rectangle(x + allowWidth + S(8), py, removeWidth, pill), Strings.Current.Remove, colors.Red, () =>
         {
             HideNow();
             if (manager.Server(id) is { } current) app.ConfirmRemove(current);
         }, list: register);
-        TintButton(g, new Rectangle(x + width - editWidth, py, editWidth, pill), "Edit…", colors.Secondary, () =>
+        TintButton(g, new Rectangle(x + width - editWidth, py, editWidth, pill), Strings.Current.EditMenu, colors.Secondary, () =>
         {
             HideNow();
             if (manager.Server(id) is { } current) EditWindow.ShowFor(manager, current);
@@ -630,7 +630,7 @@ internal sealed class TrayPanel : Form
 
     private static string Detail(ServerConfig server, ServerState state)
     {
-        var detail = state.Detail ?? state.Status.Label();
+        var detail = state.Shown();
         return state.Detail is null && state.Status != ServerStatus.Running && server.Port is { } port ? $"{detail} · :{port}" : detail;
     }
 

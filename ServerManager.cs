@@ -261,7 +261,7 @@ internal sealed class ServerManager
         }
         if (server.Port is { } busyPort && PortProbe.IsListening(busyPort))
         {
-            SetState(id, new ServerState { Status = ServerStatus.PortInUse, Detail = $"Port {busyPort} is already in use." });
+            SetState(id, new ServerState { Status = ServerStatus.PortInUse, Detail = $"Port {busyPort} is already in use.", ShownDetail = Strings.F(Strings.Current.PortBusy, busyPort) });
             DescribePortOwner(id, busyPort);
             throw new ManagerError($"port {busyPort} is already in use", 409);
         }
@@ -289,6 +289,7 @@ internal sealed class ServerManager
         {
             Status = server.Port is null ? ServerStatus.Running : ServerStatus.Starting,
             Detail = server.Port is { } port ? $"Waiting for port {port}…" : null,
+            ShownDetail = server.Port is { } waitPort ? Strings.F(Strings.Current.WaitingForPort, waitPort) : null,
             Pid = spawned.Pid,
             StartedAt = process.Started,
         });
@@ -332,7 +333,7 @@ internal sealed class ServerManager
         }
         if (process.StopRequested) return;
         process.StopRequested = true;
-        SetState(id, State(id) with { Status = ServerStatus.Stopping, Detail = null });
+        SetState(id, State(id) with { Status = ServerStatus.Stopping, Detail = null, ShownDetail = null });
         // Ctrl+Break reaches every console program in the server's process group, which
         // is how a terminal would stop it. Whatever is still running after five seconds
         // is ended with the rest of its Job Object.
@@ -427,14 +428,21 @@ internal sealed class ServerManager
         }
         else if (code == 0)
         {
-            SetState(id, new ServerState { Status = ServerStatus.Stopped, Detail = "Exited on its own.", ExitCode = 0 });
+            SetState(id, new ServerState { Status = ServerStatus.Stopped, Detail = "Exited on its own.", ShownDetail = Strings.Current.ExitedOnItsOwn, ExitCode = 0 });
         }
         else
         {
             var lastLine = log.Lines.LastOrDefault(l => l.Trim().Length > 0 && !l.StartsWith("==="));
-            var detail = raw >= 0xC0000000 ? $"Crashed with exit code 0x{raw:X8}." : $"Crashed with exit code {code}.";
-            if (lastLine is not null) detail += " " + (lastLine.Length > 160 ? lastLine.Substring(0, 160) : lastLine);
-            SetState(id, new ServerState { Status = ServerStatus.Crashed, Detail = detail, ExitCode = code });
+            var codeText = raw >= 0xC0000000 ? $"0x{raw:X8}" : code.ToString(CultureInfo.InvariantCulture);
+            var detail = $"Crashed with exit code {codeText}.";
+            var shown = Strings.F(Strings.Current.CrashedWithCode, codeText);
+            if (lastLine is not null)
+            {
+                var tail = " " + (lastLine.Length > 160 ? lastLine.Substring(0, 160) : lastLine);
+                detail += tail;
+                shown += tail;
+            }
+            SetState(id, new ServerState { Status = ServerStatus.Crashed, Detail = detail, ShownDetail = shown, ExitCode = code });
         }
         if (restartAfterExit.Remove(id))
             After(300, () => { try { Start(id); } catch (ManagerError) { } });
@@ -453,12 +461,12 @@ internal sealed class ServerManager
             if (PortProbe.IsListening(port))
             {
                 process.WaitingForPort = false;
-                SetState(id, State(id) with { Status = ServerStatus.Running, Detail = null });
+                SetState(id, State(id) with { Status = ServerStatus.Running, Detail = null, ShownDetail = null });
             }
             else if ((DateTime.UtcNow - process.Started).TotalSeconds > 90)
             {
                 process.WaitingForPort = false;
-                SetState(id, State(id) with { Status = ServerStatus.Running, Detail = $"Running, but nothing is listening on port {port}." });
+                SetState(id, State(id) with { Status = ServerStatus.Running, Detail = $"Running, but nothing is listening on port {port}.", ShownDetail = Strings.F(Strings.Current.NothingListening, port) });
             }
         }
         // Every few seconds, notice ports that something outside ServerHat opened or closed.
@@ -472,7 +480,7 @@ internal sealed class ServerManager
         var busy = PortProbe.IsListening(port);
         if (busy && state.Status == ServerStatus.Stopped)
         {
-            SetState(id, new ServerState { Status = ServerStatus.PortInUse, Detail = $"Port {port} is already in use." });
+            SetState(id, new ServerState { Status = ServerStatus.PortInUse, Detail = $"Port {port} is already in use.", ShownDetail = Strings.F(Strings.Current.PortBusy, port) });
             DescribePortOwner(id, port);
         }
         else if (!busy && state.Status == ServerStatus.PortInUse)
@@ -489,7 +497,7 @@ internal sealed class ServerManager
             context.Post(_ =>
             {
                 if (State(id).Status != ServerStatus.PortInUse) return;
-                SetState(id, State(id) with { Detail = $"Port {port} is in use by {owner.Command} (pid {owner.Pid}).", Pid = owner.Pid });
+                SetState(id, State(id) with { Detail = $"Port {port} is in use by {owner.Command} (pid {owner.Pid}).", ShownDetail = Strings.F(Strings.Current.PortOwner, port, owner.Command, owner.Pid), Pid = owner.Pid });
             }, null);
         });
     }
