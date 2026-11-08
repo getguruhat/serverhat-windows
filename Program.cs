@@ -256,6 +256,9 @@ internal sealed class TrayApp : ApplicationContext
             catch (Exception e) when (e is UnauthorizedAccessException or System.Security.SecurityException or IOException) { MessageBox.Show(e.Message, "ServerHat"); }
         };
         menu.Items.Add(atLogin);
+        var approve = new ToolStripMenuItem(Strings.Current.ApproveNewServers) { Checked = manager.RequireApproval };
+        approve.Click += (_, _) => manager.RequireApproval = !manager.RequireApproval;
+        menu.Items.Add(approve);
         if (update is { } available)
             menu.Items.Add(new ToolStripMenuItem(Strings.F(Strings.Current.UpdateMenu, available.Version), null, (_, _) => AboutWindow.Open(available.Page)));
         menu.Items.Add(new ToolStripMenuItem(Strings.Current.AboutServerHat, null, (_, _) => AboutWindow.ShowShared()));

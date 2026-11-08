@@ -34,6 +34,14 @@ internal static class Settings
         }
     }
 
+    /// "Approve new servers" (`requireApproval`, a DWORD): when on, servers that an agent,
+    /// script or `servers.json` edit adds or changes wait for Allow. Off by default.
+    public static bool RequireApproval
+    {
+        get => Read("requireApproval") is int value && value != 0;
+        set { using var key = Registry.CurrentUser.CreateSubKey(Key); key.SetValue("requireApproval", value ? 1 : 0, RegistryValueKind.DWord); }
+    }
+
     /// "Open ServerHat at sign-in", as a Run entry for this user, or the Store package's
     /// startup task.
     public static bool OpenAtLogin

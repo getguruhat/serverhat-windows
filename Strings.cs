@@ -44,6 +44,7 @@ internal sealed record Strings
     public string ImportLaunch { get; init; } = "Import .claude\\launch.json";
     public string AddAServer { get; init; } = "Add a server";
     public string OpenAtSignIn { get; init; } = "Open ServerHat when I sign in";
+    public string ApproveNewServers { get; init; } = "Approve servers added by Claude or ChatGPT";
     public string OpenServersJson { get; init; } = "Open servers.json";
     public string OpenLogsFolder { get; init; } = "Open the logs folder";
     public string CopyForClaude { get; init; } = "Copy for Claude Code";
@@ -183,6 +184,7 @@ internal sealed record Strings
             ImportLaunch = "Importar .claude\\launch.json",
             AddAServer = "Agregar un servidor",
             OpenAtSignIn = "Abrir ServerHat al iniciar sesión",
+            ApproveNewServers = "Aprobar los servidores que añadan Claude o ChatGPT",
             OpenServersJson = "Abrir servers.json",
             OpenLogsFolder = "Abrir la carpeta de registros",
             CopyForClaude = "Copiar para Claude Code",
@@ -303,6 +305,7 @@ internal sealed record Strings
             ImportLaunch = ".claude\\launch.json importieren",
             AddAServer = "Server hinzufügen",
             OpenAtSignIn = "ServerHat bei der Anmeldung öffnen",
+            ApproveNewServers = "Von Claude oder ChatGPT hinzugefügte Server genehmigen",
             OpenServersJson = "servers.json öffnen",
             OpenLogsFolder = "Protokollordner öffnen",
             CopyForClaude = "Für Claude Code kopieren",
@@ -423,6 +426,7 @@ internal sealed record Strings
             ImportLaunch = "Importer .claude\\launch.json",
             AddAServer = "Ajouter un serveur",
             OpenAtSignIn = "Ouvrir ServerHat à l'ouverture de session",
+            ApproveNewServers = "Approuver les serveurs ajoutés par Claude ou ChatGPT",
             OpenServersJson = "Ouvrir servers.json",
             OpenLogsFolder = "Ouvrir le dossier des journaux",
             CopyForClaude = "Copier pour Claude Code",
@@ -543,6 +547,7 @@ internal sealed record Strings
             ImportLaunch = "Importar .claude\\launch.json",
             AddAServer = "Adicionar um servidor",
             OpenAtSignIn = "Abrir o ServerHat ao entrar",
+            ApproveNewServers = "Aprovar servidores adicionados pelo Claude ou ChatGPT",
             OpenServersJson = "Abrir servers.json",
             OpenLogsFolder = "Abrir a pasta de logs",
             CopyForClaude = "Copiar para o Claude Code",
@@ -663,6 +668,7 @@ internal sealed record Strings
             ImportLaunch = ".claude\\launch.json をインポート",
             AddAServer = "サーバーを追加",
             OpenAtSignIn = "サインイン時に ServerHat を開く",
+            ApproveNewServers = "Claude や ChatGPT が追加したサーバーを承認する",
             OpenServersJson = "servers.json を開く",
             OpenLogsFolder = "ログ フォルダーを開く",
             CopyForClaude = "Claude Code 用にコピー",
@@ -783,6 +789,7 @@ internal sealed record Strings
             ImportLaunch = "导入 .claude\\launch.json",
             AddAServer = "添加服务器",
             OpenAtSignIn = "登录时打开 ServerHat",
+            ApproveNewServers = "批准 Claude 或 ChatGPT 添加的服务器",
             OpenServersJson = "打开 servers.json",
             OpenLogsFolder = "打开日志文件夹",
             CopyForClaude = "复制用于 Claude Code",
@@ -903,6 +910,7 @@ internal sealed record Strings
             ImportLaunch = ".claude\\launch.json 가져오기",
             AddAServer = "서버 추가",
             OpenAtSignIn = "로그인할 때 ServerHat 열기",
+            ApproveNewServers = "Claude 또는 ChatGPT가 추가한 서버 승인",
             OpenServersJson = "servers.json 열기",
             OpenLogsFolder = "로그 폴더 열기",
             CopyForClaude = "Claude Code용으로 복사",

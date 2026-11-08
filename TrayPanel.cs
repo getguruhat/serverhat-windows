@@ -315,10 +315,13 @@ internal sealed class TrayPanel : Form
             try { Settings.OpenAtLogin = !Settings.OpenAtLogin; }
             catch (Exception e) when (e is UnauthorizedAccessException or System.Security.SecurityException or IOException) { MessageBox.Show(e.Message, "ServerHat"); }
         };
+        var approve = new ToolStripMenuItem(Strings.Current.ApproveNewServers) { Checked = manager.RequireApproval };
+        approve.Click += (_, _) => manager.RequireApproval = !manager.RequireApproval;
         return [
             Item(Strings.Current.OpenServersJson, () => Program.OpenFile(Paths.ConfigFile)),
             Item(Strings.Current.OpenLogsFolder, () => { Directory.CreateDirectory(Paths.LogFolder); Program.OpenFile(Paths.LogFolder); }),
             atLogin,
+            approve,
             new ToolStripSeparator(),
             Item(Strings.Current.CopyForClaude, () => app.CopySetup(codex: false)),
             Item(Strings.Current.CopyForCodex, () => app.CopySetup(codex: true)),

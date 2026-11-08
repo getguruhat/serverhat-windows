@@ -35,7 +35,8 @@ with the token from `$APPDATA/ServerHat/api-token`.
 
    If the project has `.claude\launch.json`, import it instead:
    `Invoke-RestMethod -Method Post "$LW/v1/import" -Headers $auth -ContentType "application/json" -Body (@{ path = "C:\abs\project" } | ConvertTo-Json)`.
-   New or changed commands need the user's approval in ServerHat. If a start is actually
+   If the user turned on "Approve servers added by Claude or ChatGPT" in ServerHat's
+   Settings (off by default), new or changed commands need their approval in ServerHat. If a start is actually
    blocked for approval (`403`, or `"needsApproval": true`), tell the user once with the
    exact command and folder shown in the error; ServerHat's notification opens Allow,
    Remove and Later choices. `start?wait=30` waits for them to click Allow. Don't repeat

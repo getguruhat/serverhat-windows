@@ -189,7 +189,21 @@ internal sealed class ServerManager
     /// user hasn't allowed yet: it was added or changed through the API (so by an agent)
     /// or by editing servers.json. It can't start until the user clicks Allow. Changes
     /// made in ServerHat's own windows count as allowed.
-    public bool NeedsApproval(string id) => Server(id) is { } server && !approved.Contains(Fingerprint(server));
+    public bool NeedsApproval(string id) => Settings.RequireApproval && Server(id) is { } server && !approved.Contains(Fingerprint(server));
+
+    /// The "Approve new servers" setting. Turning it on starts from a clean slate: what's
+    /// set up now counts as allowed.
+    public bool RequireApproval
+    {
+        get => Settings.RequireApproval;
+        set
+        {
+            Settings.RequireApproval = value;
+            if (value) { approved = [.. Servers.Select(Fingerprint)]; SaveApprovals(); }
+            askedForApproval.Clear();
+            AskForPendingApprovals();
+        }
+    }
 
     public List<ServerConfig> PendingApprovals => Servers.Where(s => NeedsApproval(s.Id)).ToList();
 

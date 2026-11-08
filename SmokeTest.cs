@@ -84,6 +84,7 @@ internal static class SmokeTest
         Note("folder " + root);
         // Approvals go to a registry key of the test's own.
         Settings.Key = @"Software\GuruHat\ServerHat-smoke-" + Process.GetCurrentProcess().Id;
+        Settings.RequireApproval = true; // off by default; these tests are about the approval flow
         // A server set up before approvals existed.
         Directory.CreateDirectory(Paths.ConfigFolder);
         File.WriteAllText(Paths.ConfigFile, "{\"version\":1,\"servers\":[{\"name\":\"Existing\",\"command\":\"lwargs\",\"args\":[\"old\"]}]}");
