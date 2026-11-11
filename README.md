@@ -355,6 +355,10 @@ The code:
   approval windows. `AboutWindow.cs`: the About window.
 - `SmokeTest.cs`, `Screenshots.cs`: `--smoke-test` and `--screenshots`.
 
+## Problems and ideas
+
+Found a bug or want something? [Open an issue](https://github.com/getguruhat/serverhat-windows/issues), or ask in [Discussions](https://github.com/getguruhat/serverhat-windows/discussions). If ServerHat saves you time, a star helps other people find it.
+
 ## Support
 
 ServerHat is free. If it saves you time, you can
