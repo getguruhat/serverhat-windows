@@ -42,6 +42,7 @@ internal static class Screenshots
             Env = new Dictionary<string, string> { ["NODE_ENV"] = "development", ["PUBLIC_API_URL"] = "http://127.0.0.1:8000" },
         };
         Settings.ApprovedCommands = allowed.Select(ServerManager.Fingerprint).ToList();
+        Settings.RequireApproval = true;
         new ConfigStore().Save(new ConfigFile { Servers = [.. allowed, pending] });
 
         var failures = 0;
