@@ -35,7 +35,8 @@ internal static class Screenshots
             Listening("Worker", 9000),
             new() { Id = "storybook", Name = "Storybook", Cwd = @"~\code\app", Command = "npm", Args = ["run", "storybook"], Port = 6006 },
         };
-        // What Claude Code just added, waiting for approval.
+        // What Claude Code just added, waiting for approval. Added after the panel and menu
+        // pictures, so those show only running and stopped servers.
         var pending = new ServerConfig
         {
             Id = "blog", Name = "Blog", Cwd = @"~\code\blog", Command = "npm", Args = ["run", "dev", "--", "--port", "4321"], Port = 4321,
@@ -43,7 +44,7 @@ internal static class Screenshots
         };
         Settings.ApprovedCommands = allowed.Select(ServerManager.Fingerprint).ToList();
         Settings.RequireApproval = true;
-        new ConfigStore().Save(new ConfigFile { Servers = [.. allowed, pending] });
+        new ConfigStore().Save(new ConfigFile { Servers = [.. allowed] });
 
         var failures = 0;
         TrayApp.Quiet = true;
@@ -73,6 +74,7 @@ internal static class Screenshots
                 if (!Save(menu.Bounds, Path.Combine(output, "menu.png"))) failures++;
                 menu.Close();
 
+                app.Manager.Add(pending);
                 ApprovalWindow.Ask(app.Manager, app.Manager.Server("blog")!);
                 if (!await SaveForm<ApprovalWindow>(Path.Combine(output, "approval.png"))) failures++;
 
