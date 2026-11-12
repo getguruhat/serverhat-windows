@@ -32,8 +32,8 @@ internal static class Screenshots
         {
             Listening("Docs site", 5173),
             Listening("API", 8000),
+            Listening("Worker", 9000),
             new() { Id = "storybook", Name = "Storybook", Cwd = @"~\code\app", Command = "npm", Args = ["run", "storybook"], Port = 6006 },
-            new() { Id = "worker", Name = "Worker", Command = "cmd", Args = ["/c", "echo Error: Cannot find module './queue'& exit /b 1"], StartAtLogin = true },
         };
         // What Claude Code just added, waiting for approval.
         var pending = new ServerConfig
