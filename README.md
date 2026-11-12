@@ -10,7 +10,7 @@ line), so you never have to keep a terminal window open for them. Its built-in M
 lets Claude Code and Codex start, stop, restart and debug your servers for you, with your
 approval, and a local API does the same for your own scripts.
 
-<img src="docs/panel.png" width="360" alt="ServerHat's panel: three servers running with their addresses, one stopped, and one waiting for approval with its command, folder and environment names, and Allow and Remove"> <img src="docs/panel-dark.png" width="360" alt="The same panel in dark mode">
+<img src="docs/panel.png" width="360" alt="ServerHat's panel: three servers running with their addresses and one stopped"> <img src="docs/panel-dark.png" width="360" alt="The same panel in dark mode">
 
 macOS version: https://github.com/getguruhat/serverhat-macos. Both use the same
 `servers.json` format and the same core API.
