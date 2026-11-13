@@ -55,6 +55,15 @@ and run it. It installs for your user only, without administrator rights. The in
 isn't code-signed yet: if SmartScreen says it protected your PC, choose
 **More info › Run anyway**.
 
+Or with [Scoop](https://scoop.sh):
+
+```powershell
+scoop bucket add guruhat https://github.com/getguruhat/scoop-bucket
+scoop install guruhat/serverhat
+```
+
+Update later with `scoop update serverhat`.
+
 Windows 11 may hide new notification-area icons behind the **^** arrow. Drag the globe onto
 the taskbar, or turn ServerHat on under **Settings › Personalization › Taskbar › Other system
 tray icons**.
